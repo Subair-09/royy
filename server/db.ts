@@ -1,8 +1,46 @@
 import { MongoClient, Db } from 'mongodb';
+import bcrypt from 'bcryptjs';
 
 let dbInstance: Db | null = null;
 let mongoClient: MongoClient | null = null;
 let isMongoConnected = false;
+
+const SALT_ROUNDS = 10;
+
+/**
+ * Checks if a string matches standard bcrypt hash format ($2a$, $2b$, or $2y$)
+ */
+export function isBcryptHash(val: any): boolean {
+  return typeof val === 'string' && /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/.test(val.trim());
+}
+
+/**
+ * Cryptographically hashes a plain-text password using bcrypt.
+ * Returns existing hash if string is already a valid bcrypt hash.
+ */
+export async function hashPassword(plainTextPassword: string): Promise<string> {
+  const clean = String(plainTextPassword || '').trim();
+  if (isBcryptHash(clean)) {
+    return clean;
+  }
+  return bcrypt.hash(clean, SALT_ROUNDS);
+}
+
+/**
+ * Verifies a candidate plain-text password against a stored bcrypt hash or legacy string.
+ */
+export async function verifyPassword(inputPassword: string, storedHashOrPlain: string): Promise<boolean> {
+  if (!inputPassword || !storedHashOrPlain) return false;
+  const cleanInput = String(inputPassword).trim();
+  const cleanStored = String(storedHashOrPlain).trim();
+
+  if (isBcryptHash(cleanStored)) {
+    return bcrypt.compare(cleanInput, cleanStored);
+  }
+
+  // Legacy fallback for plain-text comparison
+  return cleanInput === cleanStored;
+}
 
 // Memory storage fallback if MongoDB URI is not provided or offline
 let memoryStore = {
@@ -47,7 +85,7 @@ let memoryStore = {
     {
       id: 'admin-super-fariat',
       email: 'fariat@gmail.com',
-      password: process.env.ADMIN_PASSWORD || 'Adewale_@09',
+      password: bcrypt.hashSync(process.env.ADMIN_PASSWORD || 'Adewale_@09', 10),
       name: 'Fariat Adewale',
       role: 'System Super Administrator',
       assignedClass: 'All Classes',
@@ -195,16 +233,70 @@ async function seedMongoDatabase() {
     });
     for (const admin of memoryStore.admins) {
       const { _id, ...cleanAdmin } = admin as any;
-      await adminsColl.updateOne(
-        { email: cleanAdmin.email },
-        { $set: cleanAdmin },
-        { upsert: true }
-      );
+      if (cleanAdmin.password && !isBcryptHash(cleanAdmin.password)) {
+        cleanAdmin.password = await hashPassword(cleanAdmin.password);
+      }
+      delete cleanAdmin.temporaryPassword;
+
+      const existing = await adminsColl.findOne({ email: cleanAdmin.email });
+      if (!existing) {
+        await adminsColl.insertOne(cleanAdmin);
+      }
     }
 
-    console.log('[MongoDB] Data seeding complete!');
+    // Always audit and guarantee no plain-text passwords exist in MongoDB
+    await migratePlaintextPasswords();
+
+    console.log('[MongoDB] Data seeding and security audit complete!');
   } catch (error) {
     console.error('[MongoDB] Error during seeding:', error);
+  }
+}
+
+/**
+ * Scans the database and memory store to ensure all administrator passwords
+ * are cryptographically hashed using bcrypt ($2b$...) and removes any plain-text temporary passwords.
+ */
+export async function migratePlaintextPasswords() {
+  // 1. Audit memory store
+  for (const admin of memoryStore.admins) {
+    if (admin.password && !isBcryptHash(admin.password)) {
+      admin.password = await hashPassword(admin.password);
+    }
+    delete admin.temporaryPassword;
+  }
+
+  // 2. Audit MongoDB collections
+  if (isMongoConnected && dbInstance) {
+    try {
+      const adminsColl = dbInstance.collection('admins');
+      const allAdmins = await adminsColl.find({}).toArray();
+      for (const a of allAdmins) {
+        let needsUpdate = false;
+        const setDoc: any = {};
+        const unsetDoc: any = {};
+
+        if (a.password && !isBcryptHash(a.password)) {
+          setDoc.password = await hashPassword(a.password);
+          needsUpdate = true;
+        }
+
+        if (a.temporaryPassword !== undefined) {
+          unsetDoc.temporaryPassword = '';
+          needsUpdate = true;
+        }
+
+        if (needsUpdate) {
+          const ops: any = {};
+          if (Object.keys(setDoc).length > 0) ops.$set = setDoc;
+          if (Object.keys(unsetDoc).length > 0) ops.$unset = unsetDoc;
+          await adminsColl.updateOne({ _id: a._id }, ops);
+        }
+      }
+      console.log('[MongoDB] Admin passwords verified: all records stored as bcrypt hashes.');
+    } catch (e) {
+      console.error('[MongoDB] Error during password audit migration:', e);
+    }
   }
 }
 
@@ -769,13 +861,15 @@ export async function createAdmin(adminData: any) {
   const cleanName = adminData.name || 'Staff Administrator';
   const permissions = resolvePermissions(cleanRole, adminData.permissions);
 
+  // Cryptographically hash the password before database insertion
+  const hashedPassword = await hashPassword(rawPassword);
+
   const newAdmin = {
     id: adminData.id || `admin-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
     email: cleanEmail,
     name: cleanName,
     role: cleanRole,
-    password: rawPassword,
-    temporaryPassword: rawPassword,
+    password: hashedPassword, // Stored strictly as a bcrypt hash
     assignedClass: adminData.assignedClass || 'All Classes',
     assignedSubject: adminData.assignedSubject || 'All Subjects',
     phone: adminData.phone || '',
@@ -791,7 +885,7 @@ export async function createAdmin(adminData: any) {
     try {
       await dbInstance.collection('admins').updateOne(
         { email: cleanEmail },
-        { $set: newAdmin },
+        { $set: newAdmin, $unset: { temporaryPassword: '' } },
         { upsert: true }
       );
     } catch (e) {
@@ -816,6 +910,13 @@ export async function updateAdmin(idOrEmail: string, updateData: any) {
     updatedAt: new Date().toISOString()
   };
 
+  // If password update is included, hash it with bcrypt before writing to DB
+  if (payload.password) {
+    payload.password = await hashPassword(payload.password);
+  }
+  // Ensure temporary password is never stored in DB
+  delete payload.temporaryPassword;
+
   if (updateData.role && (!updateData.permissions || updateData.permissions.length === 0)) {
     payload.permissions = resolvePermissions(updateData.role);
   }
@@ -824,7 +925,7 @@ export async function updateAdmin(idOrEmail: string, updateData: any) {
     try {
       await dbInstance.collection('admins').updateOne(
         { $or: [{ id: idOrEmail }, { email: key }] },
-        { $set: payload }
+        { $set: payload, $unset: { temporaryPassword: '' } }
       );
     } catch (e) {
       console.error('[MongoDB] Update admin failed:', e);
@@ -836,6 +937,7 @@ export async function updateAdmin(idOrEmail: string, updateData: any) {
   );
   if (idx !== -1) {
     memoryStore.admins[idx] = { ...memoryStore.admins[idx], ...payload };
+    delete memoryStore.admins[idx].temporaryPassword;
     return memoryStore.admins[idx];
   }
   return null;
@@ -844,9 +946,9 @@ export async function updateAdmin(idOrEmail: string, updateData: any) {
 export async function resetAdminPassword(idOrEmail: string, temporaryPassword: string) {
   const key = String(idOrEmail || '').trim().toLowerCase();
   const cleanPass = String(temporaryPassword || 'RoyalTeacher@2025').trim();
+  const hashedPassword = await hashPassword(cleanPass);
   const payload = {
-    password: cleanPass,
-    temporaryPassword: cleanPass,
+    password: hashedPassword, // Stored strictly as a bcrypt hash
     mustChangePassword: true, // Forces teacher to change password on next login
     isFirstLogin: true,
     updatedAt: new Date().toISOString()
@@ -856,7 +958,7 @@ export async function resetAdminPassword(idOrEmail: string, temporaryPassword: s
     try {
       await dbInstance.collection('admins').updateOne(
         { $or: [{ id: idOrEmail }, { email: key }] },
-        { $set: payload }
+        { $set: payload, $unset: { temporaryPassword: '' } }
       );
     } catch (e) {
       console.error('[MongoDB] Reset admin password failed:', e);
@@ -868,6 +970,7 @@ export async function resetAdminPassword(idOrEmail: string, temporaryPassword: s
   );
   if (idx !== -1) {
     memoryStore.admins[idx] = { ...memoryStore.admins[idx], ...payload };
+    delete memoryStore.admins[idx].temporaryPassword;
     return memoryStore.admins[idx];
   }
   return null;
@@ -876,6 +979,7 @@ export async function resetAdminPassword(idOrEmail: string, temporaryPassword: s
 export async function changeAdminPassword(email: string, currentPass: string, newPass: string) {
   const normalizedEmail = (email || '').trim().toLowerCase();
   const cleanNewPass = String(newPass || '').trim();
+  const cleanCurrentPass = String(currentPass || '').trim();
 
   // Find admin in DB or Memory
   let admin: any = null;
@@ -890,13 +994,13 @@ export async function changeAdminPassword(email: string, currentPass: string, ne
   const envAdminEmail = (process.env.ADMIN_EMAIL || 'fariat@gmail.com').trim().toLowerCase();
   const envAdminPassword = process.env.ADMIN_PASSWORD || 'Adewale_@09';
 
-  if (!admin && normalizedEmail === envAdminEmail && currentPass === envAdminPassword) {
+  if (!admin && normalizedEmail === envAdminEmail) {
     admin = {
       id: 'admin-super-fariat',
       email: normalizedEmail,
       name: 'Fariat Adewale',
       role: 'System Super Administrator',
-      password: envAdminPassword,
+      password: await hashPassword(envAdminPassword),
       mustChangePassword: false,
     };
   }
@@ -905,7 +1009,15 @@ export async function changeAdminPassword(email: string, currentPass: string, ne
     throw new Error('Administrator account not found.');
   }
 
-  if (admin.password !== currentPass && !(normalizedEmail === envAdminEmail && currentPass === envAdminPassword)) {
+  let isCurrentPassValid = false;
+  if (admin.password) {
+    isCurrentPassValid = await verifyPassword(cleanCurrentPass, admin.password);
+  }
+  if (!isCurrentPassValid && normalizedEmail === envAdminEmail) {
+    isCurrentPassValid = await verifyPassword(cleanCurrentPass, envAdminPassword);
+  }
+
+  if (!isCurrentPassValid) {
     throw new Error('Current temporary password does not match.');
   }
 
@@ -913,13 +1025,14 @@ export async function changeAdminPassword(email: string, currentPass: string, ne
     throw new Error('New password must be at least 6 characters long.');
   }
 
-  if (cleanNewPass === currentPass) {
+  if (cleanNewPass === cleanCurrentPass) {
     throw new Error('Your new password must be different from your temporary password.');
   }
 
+  const hashedNewPass = await hashPassword(cleanNewPass);
+
   const payload = {
-    password: cleanNewPass,
-    temporaryPassword: '',
+    password: hashedNewPass,
     mustChangePassword: false,
     isFirstLogin: false,
     updatedAt: new Date().toISOString()
@@ -928,7 +1041,7 @@ export async function changeAdminPassword(email: string, currentPass: string, ne
   if (isMongoConnected && dbInstance) {
     await dbInstance.collection('admins').updateOne(
       { email: normalizedEmail },
-      { $set: payload },
+      { $set: payload, $unset: { temporaryPassword: '' } },
       { upsert: true }
     );
   }
@@ -936,6 +1049,7 @@ export async function changeAdminPassword(email: string, currentPass: string, ne
   const idx = memoryStore.admins.findIndex(a => a.email.toLowerCase() === normalizedEmail);
   if (idx !== -1) {
     memoryStore.admins[idx] = { ...memoryStore.admins[idx], ...payload };
+    delete memoryStore.admins[idx].temporaryPassword;
     return {
       name: memoryStore.admins[idx].name,
       email: memoryStore.admins[idx].email,
@@ -984,53 +1098,74 @@ export async function verifyAdmin(email: string, pass: string) {
 
   if (!pass) return null;
 
-  // 1. Check environment variable configured admin
-  if (normalizedEmail === envAdminEmail && pass === envAdminPassword) {
-    return {
-      id: 'admin-super-fariat',
-      name: 'Fariat Adewale',
-      email: normalizedEmail,
-      role: 'System Super Administrator',
-      assignedClass: 'All Classes',
-      assignedSubject: 'All Subjects',
-      permissions: DEFAULT_ROLE_PERMISSIONS['System Super Administrator'],
-      mustChangePassword: false,
-      isFirstLogin: false,
-    };
-  }
-
-  // 2. Check MongoDB collection
+  // 1. Check MongoDB collection first (so updated/custom passwords take precedence)
   if (isMongoConnected && dbInstance) {
     const admin = await dbInstance.collection('admins').findOne({ email: normalizedEmail });
-    if (admin && admin.password === pass) {
+    if (admin && admin.password) {
+      const isMatch = await verifyPassword(pass, admin.password);
+      if (isMatch) {
+        // Auto-upgrade plain text to bcrypt hash in DB if needed
+        if (!isBcryptHash(admin.password)) {
+          const hashed = await hashPassword(pass);
+          await dbInstance.collection('admins').updateOne(
+            { email: normalizedEmail },
+            { $set: { password: hashed }, $unset: { temporaryPassword: '' } }
+          );
+        }
+        return {
+          id: admin.id || `admin-${admin._id}`,
+          name: admin.name || 'System Admin',
+          email: admin.email,
+          role: admin.role || 'Teacher / Exam Officer',
+          assignedClass: admin.assignedClass || 'All Classes',
+          assignedSubject: admin.assignedSubject || 'All Subjects',
+          permissions: resolvePermissions(admin.role, admin.permissions),
+          mustChangePassword: Boolean(admin.mustChangePassword),
+          isFirstLogin: Boolean(admin.isFirstLogin),
+        };
+      }
+    }
+  }
+
+  // 2. Check Memory Store
+  const memoryAdmin = memoryStore.admins.find(a => a.email.toLowerCase() === normalizedEmail);
+  if (memoryAdmin && memoryAdmin.password) {
+    const isMatch = await verifyPassword(pass, memoryAdmin.password);
+    if (isMatch) {
+      if (!isBcryptHash(memoryAdmin.password)) {
+        memoryAdmin.password = await hashPassword(pass);
+        delete memoryAdmin.temporaryPassword;
+      }
       return {
-        id: admin.id || `admin-${admin._id}`,
-        name: admin.name || 'System Admin',
-        email: admin.email,
-        role: admin.role || 'Teacher / Exam Officer',
-        assignedClass: admin.assignedClass || 'All Classes',
-        assignedSubject: admin.assignedSubject || 'All Subjects',
-        permissions: resolvePermissions(admin.role, admin.permissions),
-        mustChangePassword: Boolean(admin.mustChangePassword),
-        isFirstLogin: Boolean(admin.isFirstLogin),
+        id: memoryAdmin.id || 'admin-mem',
+        name: memoryAdmin.name,
+        email: memoryAdmin.email,
+        role: memoryAdmin.role,
+        assignedClass: memoryAdmin.assignedClass || 'All Classes',
+        assignedSubject: memoryAdmin.assignedSubject || 'All Subjects',
+        permissions: resolvePermissions(memoryAdmin.role, memoryAdmin.permissions),
+        mustChangePassword: Boolean(memoryAdmin.mustChangePassword),
+        isFirstLogin: Boolean(memoryAdmin.isFirstLogin),
       };
     }
   }
 
-  // 3. Check Memory Store
-  const memoryAdmin = memoryStore.admins.find(a => a.email.toLowerCase() === normalizedEmail);
-  if (memoryAdmin && memoryAdmin.password === pass) {
-    return {
-      id: memoryAdmin.id || 'admin-mem',
-      name: memoryAdmin.name,
-      email: memoryAdmin.email,
-      role: memoryAdmin.role,
-      assignedClass: memoryAdmin.assignedClass || 'All Classes',
-      assignedSubject: memoryAdmin.assignedSubject || 'All Subjects',
-      permissions: resolvePermissions(memoryAdmin.role, memoryAdmin.permissions),
-      mustChangePassword: Boolean(memoryAdmin.mustChangePassword),
-      isFirstLogin: Boolean(memoryAdmin.isFirstLogin),
-    };
+  // 3. Check environment variable configured admin (fallback if DB empty/offline)
+  if (normalizedEmail === envAdminEmail) {
+    const isEnvMatch = await verifyPassword(pass, envAdminPassword);
+    if (isEnvMatch) {
+      return {
+        id: 'admin-super-fariat',
+        name: 'Fariat Adewale',
+        email: normalizedEmail,
+        role: 'System Super Administrator',
+        assignedClass: 'All Classes',
+        assignedSubject: 'All Subjects',
+        permissions: DEFAULT_ROLE_PERMISSIONS['System Super Administrator'],
+        mustChangePassword: false,
+        isFirstLogin: false,
+      };
+    }
   }
 
   return null;

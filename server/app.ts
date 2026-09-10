@@ -400,7 +400,7 @@ app.post('/api/auth/change-password', async (req, res) => {
 app.get('/api/admins', async (req, res) => {
   try {
     const admins = await getAllAdmins();
-    // Sanitize sensitive fields if needed, but include temporary password for easy super-admin reference
+    // Sanitize sensitive fields: never leak password hashes or credentials over the API
     const sanitized = admins.map((a: any) => ({
       id: a.id || `admin-${a.email}`,
       name: a.name || 'Staff Administrator',
@@ -412,7 +412,6 @@ app.get('/api/admins', async (req, res) => {
       permissions: resolvePermissions(a.role, a.permissions),
       mustChangePassword: Boolean(a.mustChangePassword),
       isFirstLogin: Boolean(a.isFirstLogin),
-      temporaryPassword: a.temporaryPassword || '',
       createdAt: a.createdAt || new Date().toISOString(),
       updatedAt: a.updatedAt || new Date().toISOString(),
       createdBy: a.createdBy || 'Super Admin'
@@ -445,7 +444,6 @@ app.post('/api/admins', async (req, res) => {
       role: role || 'Teacher / Exam Officer',
       permissions: permissions || undefined,
       password: initialPassword,
-      temporaryPassword: initialPassword,
       assignedClass: assignedClass || 'All Classes',
       assignedSubject: assignedSubject || 'All Subjects',
       phone: phone || '',
@@ -454,10 +452,12 @@ app.post('/api/admins', async (req, res) => {
       createdBy: createdBy || 'System Administrator'
     });
 
+    const { password: _hash, temporaryPassword: _temp, ...safeAdmin } = newAdmin as any;
+
     res.status(201).json({
       success: true,
       message: `Staff account for "${name}" created. They will be prompted to set a new password on first login.`,
-      admin: newAdmin
+      admin: safeAdmin
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -470,7 +470,8 @@ app.put('/api/admins/:id', async (req, res) => {
     if (!updated) {
       return res.status(404).json({ error: 'Admin / Staff account not found.' });
     }
-    res.json({ success: true, admin: updated });
+    const { password: _hash, temporaryPassword: _temp, ...safeAdmin } = (updated || {}) as any;
+    res.json({ success: true, admin: safeAdmin });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -484,10 +485,11 @@ app.post('/api/admins/:id/reset-password', async (req, res) => {
     if (!updated) {
       return res.status(404).json({ error: 'Admin / Staff account not found.' });
     }
+    const { password: _hash, temporaryPassword: _temp, ...safeAdmin } = (updated || {}) as any;
     res.json({
       success: true,
       message: `Password reset to temporary password: "${tempPass}". The user will be required to change it on next login.`,
-      admin: updated
+      admin: safeAdmin
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
