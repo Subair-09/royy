@@ -158,6 +158,8 @@ export const AdminResultManagement: React.FC<AdminResultManagementProps> = ({
   const [teacherRemark, setTeacherRemark] = useState('');
   const [principalRemark, setPrincipalRemark] = useState('');
   const [isSavingScore, setIsSavingScore] = useState(false);
+  const [scoreError, setScoreError] = useState<string | null>(null);
+  const [stageError, setStageError] = useState<string | null>(null);
 
   // Delete Confirmation Modal State
   const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<{
@@ -584,6 +586,29 @@ export const AdminResultManagement: React.FC<AdminResultManagementProps> = ({
   // Save subject scores (Publish or Save as Draft)
   const handleSaveScores = async (isPublish: boolean) => {
     if (!editingTarget || !selectedStudent) return;
+
+    if (activeSubjects.length === 0) {
+      const err = 'Please add at least one subject to this result slip before saving or publishing.';
+      setScoreError(err);
+      onTriggerToast(err);
+      return;
+    }
+
+    const invalidSubject = activeSubjects.find(s =>
+      s.ca1 < 0 || s.ca1 > 10 || isNaN(s.ca1) ||
+      s.ca2 < 0 || s.ca2 > 10 || isNaN(s.ca2) ||
+      s.midterm < 0 || s.midterm > 20 || isNaN(s.midterm) ||
+      s.exam < 0 || s.exam > 60 || isNaN(s.exam)
+    );
+
+    if (invalidSubject) {
+      const err = `Invalid score entered for "${invalidSubject.subject}". Assessment limits: CA 1 (0-10), CA 2 (0-10), Midterm (0-20), Exam (0-60).`;
+      setScoreError(err);
+      onTriggerToast(err);
+      return;
+    }
+
+    setScoreError(null);
     setIsSavingScore(true);
 
     try {
@@ -746,7 +771,7 @@ export const AdminResultManagement: React.FC<AdminResultManagementProps> = ({
   // Add new academic class level stage
   const handleConfirmAddStage = async () => {
     if (!selectedStudent || !newStageClass) {
-      onTriggerToast('Please select a class to add.');
+      setStageError('Please select a valid class level to add.');
       return;
     }
     const activeAdminSessionObj = sessions.find(s => s.status?.includes('Active')) || sessions.find(s => s.year === '2024/2025') || sessions[0];
@@ -760,10 +785,11 @@ export const AdminResultManagement: React.FC<AdminResultManagementProps> = ({
       r => cleanClass(r.className) === cleanClass(newStageClass) && cleanSession(r.session) === cleanSession(sess)
     );
     if (stageExists) {
-      onTriggerToast(`Academic class ${newStageClass} (${sess}) already exists in student's journey.`);
-      setIsAddStageModalOpen(false);
+      setStageError(`Academic class ${newStageClass} (${sess}) already exists in student's journey.`);
       return;
     }
+
+    setStageError(null);
 
     // Create an initial placeholder record for First Term of this new stage
     const newRecord: StudentTermRecord = {
@@ -1427,6 +1453,14 @@ export const AdminResultManagement: React.FC<AdminResultManagementProps> = ({
             </div>
           </div>
 
+          {/* Validation Feedback */}
+          {scoreError && (
+            <div className="p-3 bg-red-50 border-2 border-red-200 rounded-xl flex items-center gap-2 text-red-700 text-xs font-bold animate-in fade-in">
+              <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+              <span>{scoreError}</span>
+            </div>
+          )}
+
           {/* Actions & Save Controls */}
           <div className="pt-4 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-200">
             <button
@@ -1877,6 +1911,13 @@ export const AdminResultManagement: React.FC<AdminResultManagementProps> = ({
                 </select>
               </div>
             </div>
+
+            {stageError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-red-700 text-xs font-bold animate-in fade-in">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                <span>{stageError}</span>
+              </div>
+            )}
 
             <p className="text-[11px] text-slate-500 italic">
               Once added, First, Second, and Third Term for this class will appear in the student's academic record table ready for score entry.

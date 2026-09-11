@@ -367,7 +367,13 @@ app.delete('/api/notifications/:id', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const admin = await verifyAdmin(email, password);
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const adminEmailRegex =
+      /^[a-zA-Z0-9_%+-]+(?:\.[a-zA-Z0-9_%+-]+)*@(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/;
+    if (!cleanEmail || !adminEmailRegex.test(cleanEmail)) {
+      return res.status(400).json({ error: 'Please enter a valid administrator email address' });
+    }
+    const admin = await verifyAdmin(cleanEmail, password);
     if (!admin) {
       return res.status(401).json({ error: 'Invalid admin email or security password.' });
     }

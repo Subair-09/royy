@@ -29,15 +29,30 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+
   if (!isOpen) return null;
 
   const handleClose = () => {
     setStep('login');
     setErrorMessage(null);
     setSuccessMessage(null);
+    setEmailError(null);
+    setPasswordError(null);
     setNewPassword('');
     setConfirmPassword('');
     onClose();
+  };
+
+  const validateEmailInput = (val: string) => {
+    const clean = val.trim();
+    const adminEmailRegex =
+      /^[a-zA-Z0-9_%+-]+(?:\.[a-zA-Z0-9_%+-]+)*@(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/;
+    if (!clean || !adminEmailRegex.test(clean)) {
+      return 'Please enter a valid administrator email address';
+    }
+    return null;
   };
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
@@ -45,18 +60,17 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
     setErrorMessage(null);
     setSuccessMessage(null);
 
+    const emailErr = validateEmailInput(email);
+    const passErr = !password.trim() ? 'Please enter your password.' : null;
+
+    setEmailError(emailErr);
+    setPasswordError(passErr);
+
+    if (emailErr || passErr) {
+      return;
+    }
+
     const cleanEmail = email.trim().toLowerCase();
-
-    if (!cleanEmail || !cleanEmail.includes('@')) {
-      setErrorMessage('Please enter a valid administrator email address.');
-      return;
-    }
-
-    if (!password) {
-      setErrorMessage('Please enter your password.');
-      return;
-    }
-
     setIsLoading(true);
 
     try {
@@ -171,37 +185,72 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
             )}
 
             {/* Login Form */}
-            <form onSubmit={handleLoginSubmit} className="space-y-4">
+            <form onSubmit={handleLoginSubmit} className="space-y-4" noValidate>
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
-                  Admin / Teacher Email
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Admin / Teacher Email
+                  </label>
+                  {emailError && (
+                    <span className="text-[10px] text-red-600 font-semibold flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      {emailError}
+                    </span>
+                  )}
+                </div>
                 <div className="relative">
                   <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="email"
                     required
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (emailError) setEmailError(null);
+                    }}
+                    onBlur={() => {
+                      if (email.trim()) {
+                        setEmailError(validateEmailInput(email));
+                      }
+                    }}
                     placeholder="e.g. yourname@faithacademy.edu.ng"
-                    className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
+                    className={`w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs font-semibold focus:outline-none transition-all ${
+                      emailError
+                        ? 'border-red-400 bg-red-50/40 focus:ring-2 focus:ring-red-500/20'
+                        : 'border-slate-300 focus:ring-2 focus:ring-[#1E3A8A]'
+                    }`}
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
-                  Password
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Password
+                  </label>
+                  {passwordError && (
+                    <span className="text-[10px] text-red-600 font-semibold flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      {passwordError}
+                    </span>
+                  )}
+                </div>
                 <div className="relative">
                   <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type={showPassword ? 'text' : 'password'}
                     required
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (passwordError) setPasswordError(null);
+                    }}
                     placeholder="••••••••••••"
-                    className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
+                    className={`w-full pl-10 pr-10 py-2.5 bg-slate-50 border rounded-xl text-xs font-mono font-bold focus:outline-none transition-all ${
+                      passwordError
+                        ? 'border-red-400 bg-red-50/40 focus:ring-2 focus:ring-red-500/20'
+                        : 'border-slate-300 focus:ring-2 focus:ring-[#1E3A8A]'
+                    }`}
                   />
                   <button
                     type="button"

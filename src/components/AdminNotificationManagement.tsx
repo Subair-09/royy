@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { SchoolNotification } from '../types';
 import { api } from '../services/api';
+import { validateRequiredText, validateSessionYear } from '../utils/formValidation';
 
 interface AdminNotificationManagementProps {
   systemSessions?: any[];
@@ -54,6 +55,7 @@ export const AdminNotificationManagement: React.FC<AdminNotificationManagementPr
   const [linkText, setLinkText] = useState('Check Result Now');
   const [targetAction, setTargetAction] = useState<'check_result' | 'student_portal' | 'none'>('check_result');
   const [isActive, setIsActive] = useState(true);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   const fetchNotifications = async () => {
     setIsLoading(true);
@@ -86,6 +88,7 @@ export const AdminNotificationManagement: React.FC<AdminNotificationManagementPr
     setLinkText('Check Result Now');
     setTargetAction('check_result');
     setIsActive(true);
+    setFormErrors({});
     setEditingNotifId(null);
     setIsFormOpen(false);
   };
@@ -93,6 +96,7 @@ export const AdminNotificationManagement: React.FC<AdminNotificationManagementPr
   const applyTemplate = (type: '2024_results' | 'midterm' | 'resumption' | 'graduating') => {
     setIsFormOpen(true);
     setEditingNotifId(null);
+    setFormErrors({});
 
     if (type === '2024_results') {
       setHeadline('Official Notice: Results for the 2024/2025 Academic Session are now available for checking!');
@@ -153,17 +157,44 @@ export const AdminNotificationManagement: React.FC<AdminNotificationManagementPr
     setLinkText(notif.linkText || 'Check Result Now');
     setTargetAction(notif.targetAction || 'check_result');
     setIsActive(notif.isActive !== false);
+    setFormErrors({});
     setIsFormOpen(true);
     window.scrollTo({ top: 100, behavior: 'smooth' });
   };
 
   const handleSaveNotification = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!headline.trim()) {
-      alert('Please enter a notification headline.');
+    const errors: Record<string, string> = {};
+
+    const headlineRes = validateRequiredText(headline, 'Headline', 5, 250);
+    if (!headlineRes.isValid && headlineRes.error) {
+      errors.headline = headlineRes.error;
+    }
+
+    const tagRes = validateRequiredText(tag, 'Badge Tag', 2, 50);
+    if (!tagRes.isValid && tagRes.error) {
+      errors.tag = tagRes.error;
+    }
+
+    const sessionRes = validateSessionYear(academicSession);
+    if (!sessionRes.isValid && sessionRes.error) {
+      errors.academicSession = sessionRes.error;
+    }
+
+    if (targetAction !== 'none') {
+      const linkRes = validateRequiredText(linkText, 'Button Text', 2, 40);
+      if (!linkRes.isValid && linkRes.error) {
+        errors.linkText = linkRes.error;
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      onTriggerToast('Please correct the validation errors in the announcement form.');
       return;
     }
 
+    setFormErrors({});
     setIsSaving(true);
     try {
       const payload: Partial<SchoolNotification> = {
@@ -172,7 +203,7 @@ export const AdminNotificationManagement: React.FC<AdminNotificationManagementPr
         tag: tag.trim() || 'Notice',
         category,
         urgency,
-        academicSession,
+        academicSession: academicSession.trim(),
         term,
         linkText: linkText.trim() || 'Check Result',
         targetAction,
@@ -415,20 +446,36 @@ export const AdminNotificationManagement: React.FC<AdminNotificationManagementPr
             </button>
           </div>
 
-          <form onSubmit={handleSaveNotification} className="space-y-5">
+          <form onSubmit={handleSaveNotification} className="space-y-5" noValidate>
             {/* Headline Input */}
             <div>
-              <label className="block text-xs font-black uppercase text-slate-700 mb-1.5 flex items-center justify-between">
-                <span>Notification Headline *</span>
-                <span className="text-[10px] text-slate-400 font-normal">Shown prominently on landing page banner</span>
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-black uppercase text-slate-700">
+                  <span>Notification Headline *</span>
+                </label>
+                {formErrors.headline ? (
+                  <span className="text-[11px] text-red-600 font-bold flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    {formErrors.headline}
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-slate-400 font-normal">Shown prominently on landing page banner</span>
+                )}
+              </div>
               <input
                 type="text"
                 required
                 value={headline}
-                onChange={(e) => setHeadline(e.target.value)}
+                onChange={(e) => {
+                  setHeadline(e.target.value);
+                  if (formErrors.headline) setFormErrors((prev) => ({ ...prev, headline: '' }));
+                }}
                 placeholder="e.g. Official Notice: Results for the 2024/2025 Academic Session are now available for checking!"
-                className="w-full p-3 bg-slate-50 border border-slate-300 rounded-2xl text-xs sm:text-sm font-bold text-[#0F172A] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] transition-all shadow-xs"
+                className={`w-full p-3 bg-slate-50 border rounded-2xl text-xs sm:text-sm font-bold text-[#0F172A] focus:bg-white focus:outline-none transition-all shadow-xs ${
+                  formErrors.headline
+                    ? 'border-red-400 bg-red-50/40 focus:ring-2 focus:ring-red-500/20'
+                    : 'border-slate-300 focus:ring-2 focus:ring-[#1E3A8A]'
+                }`}
               />
             </div>
 
@@ -452,15 +499,30 @@ export const AdminNotificationManagement: React.FC<AdminNotificationManagementPr
               
               {/* Tag / Badge Text */}
               <div>
-                <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">
-                  Tag / Badge Label
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[11px] font-bold uppercase text-slate-600">
+                    Tag / Badge Label *
+                  </label>
+                  {formErrors.tag && (
+                    <span className="text-[10px] text-red-600 font-bold flex items-center gap-0.5">
+                      <AlertCircle className="w-3 h-3" />
+                      {formErrors.tag}
+                    </span>
+                  )}
+                </div>
                 <input
                   type="text"
                   value={tag}
-                  onChange={(e) => setTag(e.target.value)}
+                  onChange={(e) => {
+                    setTag(e.target.value);
+                    if (formErrors.tag) setFormErrors((prev) => ({ ...prev, tag: '' }));
+                  }}
                   placeholder="e.g. 2024/2025 Result Release"
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-[#0F172A] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
+                  className={`w-full p-2.5 bg-slate-50 border rounded-xl text-xs font-bold text-[#0F172A] focus:bg-white focus:outline-none transition-all ${
+                    formErrors.tag
+                      ? 'border-red-400 bg-red-50/40 focus:ring-2 focus:ring-red-500/20'
+                      : 'border-slate-200 focus:ring-2 focus:ring-[#1E3A8A]'
+                  }`}
                 />
               </div>
 
@@ -482,15 +544,32 @@ export const AdminNotificationManagement: React.FC<AdminNotificationManagementPr
 
               {/* Academic Session */}
               <div>
-                <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">
-                  Academic Session
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[11px] font-bold uppercase text-slate-600">
+                    Academic Session *
+                  </label>
+                  {formErrors.academicSession && (
+                    <span className="text-[10px] text-red-600 font-bold flex items-center gap-0.5">
+                      <AlertCircle className="w-3 h-3" />
+                      {formErrors.academicSession}
+                    </span>
+                  )}
+                </div>
                 <input
                   type="text"
+                  maxLength={9}
                   value={academicSession}
-                  onChange={(e) => setAcademicSession(e.target.value)}
+                  onChange={(e) => {
+                    const numbersAndSlashOnly = e.target.value.replace(/[^0-9/]/g, '').slice(0, 9);
+                    setAcademicSession(numbersAndSlashOnly);
+                    if (formErrors.academicSession) setFormErrors((prev) => ({ ...prev, academicSession: '' }));
+                  }}
                   placeholder="e.g. 2024/2025"
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-[#0F172A] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
+                  className={`w-full p-2.5 bg-slate-50 border rounded-xl text-xs font-bold text-[#0F172A] focus:bg-white focus:outline-none transition-all ${
+                    formErrors.academicSession
+                      ? 'border-red-400 bg-red-50/40 focus:ring-2 focus:ring-red-500/20'
+                      : 'border-slate-200 focus:ring-2 focus:ring-[#1E3A8A]'
+                  }`}
                 />
               </div>
 
@@ -529,16 +608,31 @@ export const AdminNotificationManagement: React.FC<AdminNotificationManagementPr
 
               {/* Button Text */}
               <div>
-                <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">
-                  Button Text Label
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[11px] font-bold uppercase text-slate-600">
+                    Button Text Label
+                  </label>
+                  {formErrors.linkText && (
+                    <span className="text-[10px] text-red-600 font-bold flex items-center gap-0.5">
+                      <AlertCircle className="w-3 h-3" />
+                      {formErrors.linkText}
+                    </span>
+                  )}
+                </div>
                 <input
                   type="text"
                   value={linkText}
-                  onChange={(e) => setLinkText(e.target.value)}
+                  onChange={(e) => {
+                    setLinkText(e.target.value);
+                    if (formErrors.linkText) setFormErrors((prev) => ({ ...prev, linkText: '' }));
+                  }}
                   placeholder="e.g. Check Result Now"
                   disabled={targetAction === 'none'}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-[#0F172A] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] disabled:opacity-40"
+                  className={`w-full p-2.5 bg-slate-50 border rounded-xl text-xs font-bold text-[#0F172A] focus:bg-white focus:outline-none transition-all disabled:opacity-40 ${
+                    formErrors.linkText
+                      ? 'border-red-400 bg-red-50/40 focus:ring-2 focus:ring-red-500/20'
+                      : 'border-slate-200 focus:ring-2 focus:ring-[#1E3A8A]'
+                  }`}
                 />
               </div>
 

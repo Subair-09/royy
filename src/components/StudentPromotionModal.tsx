@@ -9,6 +9,7 @@ import {
   User,
   ShieldCheck,
   AlertTriangle,
+  AlertCircle,
   Award,
   X,
   RefreshCw,
@@ -92,6 +93,7 @@ export const StudentPromotionModal: React.FC<StudentPromotionModalProps> = ({
   const [promotionRemarks, setPromotionRemarks] = useState('');
   const [archiveCurrentResult, setArchiveCurrentResult] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   // Initialize recommendation whenever modal opens or student changes
   useEffect(() => {
@@ -126,6 +128,19 @@ export const StudentPromotionModal: React.FC<StudentPromotionModalProps> = ({
 
   const handleConfirmPromotion = async () => {
     if (!student) return;
+
+    if (verdict !== 'GRADUATED') {
+      if (!targetClass.trim()) {
+        setValidationError('Please select or specify a target enrolled class.');
+        return;
+      }
+      if (!targetSession.trim()) {
+        setValidationError('Please select or specify a target academic session.');
+        return;
+      }
+    }
+
+    setValidationError(null);
     setIsSubmitting(true);
 
     try {
@@ -244,6 +259,14 @@ export const StudentPromotionModal: React.FC<StudentPromotionModalProps> = ({
         {/* Modal Scrollable Body */}
         <div className="p-6 space-y-5 overflow-y-auto flex-1">
           
+          {/* Validation Alert */}
+          {validationError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-2xl flex items-center gap-2.5 text-red-700 text-xs font-bold animate-in fade-in">
+              <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+              <span>{validationError}</span>
+            </div>
+          )}
+
           {/* Current Academic Standing Card */}
           <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex items-center justify-between gap-3 text-xs">
             <div className="space-y-0.5">

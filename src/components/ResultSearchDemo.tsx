@@ -219,12 +219,26 @@ export const ResultSearchDemo: React.FC<ResultSearchDemoProps> = ({
   const cardResult = displayResult || activeResult;
   const activeResultRank = calculateDynamicStudentPosition(cardResult, allStudentsList);
 
+  const [inputError, setInputError] = useState<string | null>(null);
+
   const handleSearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    setIsLoading(true);
     setErrorMsg(null);
 
     const cleaned = studentIdInput.trim();
+    if (!cleaned) {
+      setInputError('Please enter a student Registration ID.');
+      return;
+    }
+
+    if (cleaned.length < 4) {
+      setInputError('Registration ID must be at least 4 digits (e.g. 2025104).');
+      return;
+    }
+
+    setInputError(null);
+    setIsLoading(true);
+
     try {
       const apiResult = await api.getStudentById(cleaned);
       setIsLoading(false);
@@ -232,7 +246,7 @@ export const ResultSearchDemo: React.FC<ResultSearchDemoProps> = ({
       if (apiResult) {
         setActiveResult(apiResult);
       } else {
-        setErrorMsg(`No record found for Registration Number "${studentIdInput}".`);
+        setErrorMsg(`No record found for Registration Number "${studentIdInput}". Please verify the student ID or select a sample ID above.`);
       }
     } catch {
       setIsLoading(false);
@@ -242,6 +256,7 @@ export const ResultSearchDemo: React.FC<ResultSearchDemoProps> = ({
 
   const handleSampleSelect = async (id: string) => {
     setStudentIdInput(id);
+    setInputError(null);
     setIsLoading(true);
     setErrorMsg(null);
 
@@ -338,23 +353,38 @@ export const ResultSearchDemo: React.FC<ResultSearchDemoProps> = ({
                   <div className="relative">
                     <input
                       type="text"
-                      maxLength={7}
+                      maxLength={12}
                       value={studentIdInput}
-                      onChange={(e) => setStudentIdInput(e.target.value.replace(/\D/g, ''))}
+                      onChange={(e) => {
+                        setStudentIdInput(e.target.value.replace(/\D/g, ''));
+                        if (inputError) setInputError(null);
+                      }}
                       placeholder="e.g. 2025104"
-                      required
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-2xl text-sm font-mono font-bold text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] focus:bg-white transition-all shadow-xs"
+                      className={`w-full px-4 py-3 bg-slate-50 border rounded-2xl text-sm font-mono font-bold text-[#0F172A] focus:outline-none transition-all shadow-xs ${
+                        inputError
+                          ? 'border-red-400 bg-red-50/40 focus:ring-2 focus:ring-red-500/20'
+                          : 'border-slate-300 focus:ring-2 focus:ring-[#1E3A8A] focus:bg-white'
+                      }`}
                     />
                     {studentIdInput && (
                       <button
                         type="button"
-                        onClick={() => setStudentIdInput('')}
+                        onClick={() => {
+                          setStudentIdInput('');
+                          setInputError(null);
+                        }}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400 hover:text-slate-600 bg-slate-200 px-2 py-0.5 rounded-lg"
                       >
                         Clear
                       </button>
                     )}
                   </div>
+                  {inputError && (
+                    <span className="text-[11px] text-red-600 font-semibold flex items-center gap-1.5 mt-1.5 animate-fadeIn">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      {inputError}
+                    </span>
+                  )}
                 </div>
 
                 {/* Term Dropdown */}

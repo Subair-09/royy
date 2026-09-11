@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { SchoolLogo } from './SchoolLogo';
 import { api } from '../services/api';
 import { StudentResult } from '../types';
+import { validateName, validateStudentId } from '../utils/formValidation';
 import {
   GraduationCap,
   Search,
@@ -34,30 +35,93 @@ export const StudentLoginPage: React.FC<StudentLoginPageProps> = ({
   const [term, setTerm] = useState('First Term');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   // Helper for quick demo filling
   const handleFillDemo = (demoSurname: string, demoId: string) => {
     setSurname(demoSurname);
     setRegId(demoId);
     setErrorMessage(null);
+    setFieldErrors({});
+  };
+
+  const validateSurnameField = (val: string) => {
+    const clean = val.trim();
+    if (!clean) return 'Please enter student surname (last name).';
+    if (/\d/.test(clean)) return 'Surname cannot contain numbers. Alphabet letters only.';
+    if (clean.length < 2) return 'Surname must be at least 2 characters.';
+    if (!/^[a-zA-Z\s'-]+$/.test(clean)) return 'Surname can only contain alphabet letters, hyphens, and apostrophes.';
+    return undefined;
+  };
+
+  const validateRegIdField = (val: string) => {
+    const clean = val.trim();
+    if (!clean) return 'Please enter student Registration ID.';
+    if (/[a-zA-Z]/.test(clean)) return 'Registration ID cannot contain alphabet letters. Numbers only.';
+    if (!/^\d+$/.test(clean)) return 'Registration ID must contain numbers only.';
+    if (clean.length < 4 || clean.length > 12) return 'Registration ID must be between 4 and 12 digits (e.g. 2025104).';
+    return undefined;
+  };
+
+  const handleBlur = (field: 'surname' | 'regId') => {
+    setTouched(prev => ({ ...prev, [field]: true }));
+    const err = field === 'surname' ? validateSurnameField(surname) : validateRegIdField(regId);
+    setFieldErrors(prev => {
+      const next = { ...prev };
+      if (err) next[field] = err;
+      else delete next[field];
+      return next;
+    });
+  };
+
+  const handleSurnameChange = (val: string) => {
+    // Disallow typing numbers in surname field
+    const lettersOnly = val.replace(/[0-9]/g, '');
+    setSurname(lettersOnly);
+    if (touched.surname) {
+      const err = validateSurnameField(lettersOnly);
+      setFieldErrors(prev => {
+        const next = { ...prev };
+        if (err) next.surname = err;
+        else delete next.surname;
+        return next;
+      });
+    }
+  };
+
+  const handleRegIdChange = (val: string) => {
+    const clean = val.replace(/\D/g, '').slice(0, 12);
+    setRegId(clean);
+    if (touched.regId) {
+      const err = validateRegIdField(clean);
+      setFieldErrors(prev => {
+        const next = { ...prev };
+        if (err) next.regId = err;
+        else delete next.regId;
+        return next;
+      });
+    }
   };
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
+    setTouched({ surname: true, regId: true });
+
+    const surnameErr = validateSurnameField(surname);
+    const regIdErr = validateRegIdField(regId);
+
+    if (surnameErr || regIdErr) {
+      setFieldErrors({
+        ...(surnameErr ? { surname: surnameErr } : {}),
+        ...(regIdErr ? { regId: regIdErr } : {}),
+      });
+      return;
+    }
 
     const cleanSurname = surname.trim().toLowerCase();
     const cleanRegId = regId.trim();
-
-    if (!cleanSurname) {
-      setErrorMessage('Please enter student surname (last name).');
-      return;
-    }
-
-    if (!cleanRegId || !/^\d{7}$/.test(cleanRegId)) {
-      setErrorMessage('Please enter a valid 7-digit Registration ID (e.g. 2025104).');
-      return;
-    }
 
     setIsLoading(true);
 
@@ -83,7 +147,7 @@ export const StudentLoginPage: React.FC<StudentLoginPageProps> = ({
         }
       } else {
         setErrorMessage(
-          `No student record found for 7-digit Registration ID "${cleanRegId}". Please verify your details.`
+          `No student record found for Registration ID "${cleanRegId}". Please verify your details.`
         );
       }
     } catch {
@@ -161,13 +225,21 @@ export const StudentLoginPage: React.FC<StudentLoginPageProps> = ({
             )}
 
             {/* Login Form */}
-            <form onSubmit={handleLoginSubmit} className="space-y-5">
+            <form onSubmit={handleLoginSubmit} className="space-y-5" noValidate>
               
               {/* Surname Input */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                  Student Surname (Last Name) *
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Student Surname (Last Name) *
+                  </label>
+                  {touched.surname && fieldErrors.surname && (
+                    <span className="text-[10px] text-red-600 font-semibold flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      {fieldErrors.surname}
+                    </span>
+                  )}
+                </div>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                     <User className="w-4 h-4 text-[#1E3A8A]" />
@@ -176,9 +248,14 @@ export const StudentLoginPage: React.FC<StudentLoginPageProps> = ({
                     type="text"
                     required
                     value={surname}
-                    onChange={(e) => setSurname(e.target.value)}
+                    onChange={(e) => handleSurnameChange(e.target.value)}
+                    onBlur={() => handleBlur('surname')}
                     placeholder="e.g. Okon or Martinez"
-                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-[#1E3A8A] focus:ring-2 focus:ring-[#1E3A8A]/10 transition-all shadow-xs"
+                    className={`w-full pl-10 pr-4 py-3 bg-slate-50 border rounded-2xl text-sm font-semibold text-slate-900 placeholder-slate-400 focus:outline-none transition-all shadow-xs ${
+                      touched.surname && fieldErrors.surname
+                        ? 'border-red-400 bg-red-50/40 focus:ring-2 focus:ring-red-500/20'
+                        : 'border-slate-200 focus:bg-white focus:border-[#1E3A8A] focus:ring-2 focus:ring-[#1E3A8A]/10'
+                    }`}
                   />
                 </div>
                 <p className="text-[10px] text-slate-500 mt-1">
@@ -188,9 +265,17 @@ export const StudentLoginPage: React.FC<StudentLoginPageProps> = ({
 
               {/* Registration ID Input */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                  Registration ID *
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Registration ID *
+                  </label>
+                  {touched.regId && fieldErrors.regId && (
+                    <span className="text-[10px] text-red-600 font-semibold flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      {fieldErrors.regId}
+                    </span>
+                  )}
+                </div>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                     <Hash className="w-4 h-4 text-[#F59E0B]" />
@@ -198,11 +283,16 @@ export const StudentLoginPage: React.FC<StudentLoginPageProps> = ({
                   <input
                     type="text"
                     required
-                    maxLength={7}
+                    maxLength={12}
                     value={regId}
-                    onChange={(e) => setRegId(e.target.value.replace(/\D/g, ''))}
+                    onChange={(e) => handleRegIdChange(e.target.value)}
+                    onBlur={() => handleBlur('regId')}
                     placeholder="e.g. 2025104"
-                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-mono font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-[#1E3A8A] focus:ring-2 focus:ring-[#1E3A8A]/10 transition-all shadow-xs tracking-widest"
+                    className={`w-full pl-10 pr-4 py-3 bg-slate-50 border rounded-2xl text-sm font-mono font-bold text-slate-900 placeholder-slate-400 focus:outline-none transition-all shadow-xs tracking-widest ${
+                      touched.regId && fieldErrors.regId
+                        ? 'border-red-400 bg-red-50/40 focus:ring-2 focus:ring-red-500/20'
+                        : 'border-slate-200 focus:bg-white focus:border-[#1E3A8A] focus:ring-2 focus:ring-[#1E3A8A]/10'
+                    }`}
                   />
                 </div>
               </div>

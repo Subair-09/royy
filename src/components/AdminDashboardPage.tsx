@@ -13,6 +13,16 @@ import { api, DbStatus } from '../services/api';
 import { calculateDynamicStudentPosition, isStudentInClass } from '../utils/studentRanking';
 import { calculateAgeFromDob, formatDateForInput, formatDateDisplay } from '../utils/studentDateUtils';
 import { StudentResult, SchoolHeaderInfo, DEFAULT_SCHOOL_HEADER, StudentTermRecord, SubjectGrade } from '../types';
+import {
+  validateName,
+  validateStudentId,
+  validateRequiredText,
+  validateSessionYear,
+  validateSubjectCode,
+  validateSubjectName,
+  validateTermName,
+  validateClassArm,
+} from '../utils/formValidation';
 
 const upsertTermRecord = (
   existingRecords: StudentTermRecord[] = [],
@@ -192,6 +202,17 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
   const [editingStudent, setEditingStudent] = useState<StudentResult | null>(null);
   const [isEditStudentOpen, setIsEditStudentOpen] = useState(false);
   const [promotingStudent, setPromotingStudent] = useState<StudentResult | null>(null);
+
+  // Form Validation Error States
+  const [addStudentErrors, setAddStudentErrors] = useState<Record<string, string>>({});
+  const [editStudentErrors, setEditStudentErrors] = useState<Record<string, string>>({});
+  const [schoolHeaderErrors, setSchoolHeaderErrors] = useState<Record<string, string>>({});
+  const [addClassErrors, setAddClassErrors] = useState<Record<string, string>>({});
+  const [addSubjectErrors, setAddSubjectErrors] = useState<Record<string, string>>({});
+  const [addSessionErrors, setAddSessionErrors] = useState<Record<string, string>>({});
+  const [editSessionErrors, setEditSessionErrors] = useState<Record<string, string>>({});
+  const [addTermErrors, setAddTermErrors] = useState<Record<string, string>>({});
+  const [editTermErrors, setEditTermErrors] = useState<Record<string, string>>({});
 
   // Reports & Class Broadsheet State
   const [selectedReportClass, setSelectedReportClass] = useState('');
@@ -1215,10 +1236,17 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
   // Session Handlers
   const handleAddSessionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newSession.year) {
-      triggerToast('Please specify the academic session year (e.g. 2026/2027).');
+    const errors: Record<string, string> = {};
+    const sessionRes = validateSessionYear(newSession.year);
+    if (!sessionRes.isValid && sessionRes.error) {
+      errors.year = sessionRes.error;
+    }
+    if (Object.keys(errors).length > 0) {
+      setAddSessionErrors(errors);
+      triggerToast('Please correct errors in the academic session form.');
       return;
     }
+    setAddSessionErrors({});
     const sessionYear = newSession.year.includes('Academic Session') ? newSession.year : `${newSession.year} Academic Session`;
     const created = {
       id: String(Date.now()),
@@ -1299,6 +1327,17 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
   const handleUpdateSessionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editSessionCandidate) return;
+    const errors: Record<string, string> = {};
+    const sessionRes = validateSessionYear(editSessionCandidate.year);
+    if (!sessionRes.isValid && sessionRes.error) {
+      errors.year = sessionRes.error;
+    }
+    if (Object.keys(errors).length > 0) {
+      setEditSessionErrors(errors);
+      triggerToast('Please correct errors in the session update form.');
+      return;
+    }
+    setEditSessionErrors({});
     await api.updateSession(editSessionCandidate.id, editSessionCandidate);
     setSessions(sessions.map(s => s.id === editSessionCandidate.id ? editSessionCandidate : s));
     setEditSessionCandidate(null);
@@ -1317,10 +1356,17 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
   // Term Handlers
   const handleAddTermSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTerm.name) {
-      triggerToast('Please enter the term name.');
+    const errors: Record<string, string> = {};
+    const termRes = validateTermName(newTerm.name);
+    if (!termRes.isValid && termRes.error) {
+      errors.name = termRes.error;
+    }
+    if (Object.keys(errors).length > 0) {
+      setAddTermErrors(errors);
+      triggerToast('Please correct errors in the academic term form.');
       return;
     }
+    setAddTermErrors({});
     const created = {
       id: `t_${Date.now()}`,
       name: newTerm.name,
@@ -1392,6 +1438,17 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
   const handleUpdateTermSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editTermCandidate) return;
+    const errors: Record<string, string> = {};
+    const termRes = validateTermName(editTermCandidate.name);
+    if (!termRes.isValid && termRes.error) {
+      errors.name = termRes.error;
+    }
+    if (Object.keys(errors).length > 0) {
+      setEditTermErrors(errors);
+      triggerToast('Please correct errors in the term update form.');
+      return;
+    }
+    setEditTermErrors({});
     await api.updateTerm(editTermCandidate.id, editTermCandidate);
     setTerms(terms.map(t => t.id === editTermCandidate.id ? editTermCandidate : t));
     setEditTermCandidate(null);
@@ -1409,10 +1466,31 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
 
   const handleAddClassSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newClass.name || !newClass.arm) {
-      triggerToast('Please provide class name and arm stream.');
+    const errors: Record<string, string> = {};
+    const nameRes = validateRequiredText(newClass.name, 'Class Name', 2, 60);
+    if (!nameRes.isValid && nameRes.error) {
+      errors.name = nameRes.error;
+    }
+    const armRes = validateClassArm(newClass.arm);
+    if (!armRes.isValid && armRes.error) {
+      errors.arm = armRes.error;
+    }
+    if (newClass.teacher && newClass.teacher.trim()) {
+      const teacherRes = validateName(newClass.teacher, 'Form Teacher Name', 2, 80);
+      if (!teacherRes.isValid && teacherRes.error) {
+        errors.teacher = teacherRes.error;
+      }
+    }
+    const cap = Number(newClass.capacity);
+    if (isNaN(cap) || cap < 5 || cap > 100) {
+      errors.capacity = 'Capacity must be a number between 5 and 100 students.';
+    }
+    if (Object.keys(errors).length > 0) {
+      setAddClassErrors(errors);
+      triggerToast('Please correct errors in the class stream form.');
       return;
     }
+    setAddClassErrors({});
     const created = {
       id: String(Date.now()),
       name: newClass.name,
@@ -1440,10 +1518,29 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
 
   const handleAddSubjectSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newSubject.name.trim()) {
-      triggerToast('Please provide a subject title.');
+    const errors: Record<string, string> = {};
+    const titleRes = validateSubjectName(newSubject.name);
+    if (!titleRes.isValid && titleRes.error) {
+      errors.name = titleRes.error;
+    }
+    if (newSubject.teacher && newSubject.teacher.trim()) {
+      const teacherRes = validateName(newSubject.teacher, 'Lead Instructor Name', 2, 80);
+      if (!teacherRes.isValid && teacherRes.error) {
+        errors.teacher = teacherRes.error;
+      }
+    }
+    if (newSubject.code.trim()) {
+      const codeRes = validateSubjectCode(newSubject.code);
+      if (!codeRes.isValid && codeRes.error) {
+        errors.code = codeRes.error;
+      }
+    }
+    if (Object.keys(errors).length > 0) {
+      setAddSubjectErrors(errors);
+      triggerToast('Please correct errors in the subject form.');
       return;
     }
+    setAddSubjectErrors({});
     const generatedCode = newSubject.code.trim() ? newSubject.code.toUpperCase() : (newSubject.name.trim().substring(0, 3).toUpperCase() + Math.floor(Math.random() * 899 + 100));
     const created = {
       code: generatedCode,
@@ -1736,25 +1833,41 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
 
   const handleAddStudentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newStudent.name || !newStudent.studentId) {
-      triggerToast('Please provide student full name and 7-digit registration ID.');
-      return;
+    const errors: Record<string, string> = {};
+    const nameRes = validateName(newStudent.name, 'Full Student Name', 2, 80);
+    if (!nameRes.isValid && nameRes.error) {
+      errors.name = nameRes.error;
     }
 
-    const cleanRegId = String(newStudent.studentId).trim();
-
-    // 1. Check 7-digit numeric format constraint
-    if (!/^\d{7}$/.test(cleanRegId)) {
-      triggerToast('Registration ID must be a unique 7-digit number (e.g., 2026101).');
-      return;
+    const cleanRegId = String(newStudent.studentId || '').trim();
+    if (!cleanRegId) {
+      errors.studentId = 'Registration ID is required.';
+    } else if (!/^\d{7}$/.test(cleanRegId)) {
+      errors.studentId = 'Registration ID must be a unique 7-digit number (e.g., 2026101).';
+    } else {
+      const existingStudent = students.find(s => String(s.studentId || '').trim() === cleanRegId);
+      if (existingStudent) {
+        errors.studentId = `Registration ID "${cleanRegId}" is already assigned to ${existingStudent.fullName || (existingStudent as any).name}.`;
+      }
     }
 
-    // 2. Uniqueness Constraint / Primary Key check
-    const existingStudent = students.find(s => String(s.studentId || '').trim() === cleanRegId);
-    if (existingStudent) {
-      triggerToast(`Registration ID "${cleanRegId}" is already assigned to ${existingStudent.fullName || (existingStudent as any).name}. Reg ID must be unique!`);
+    if (!newStudent.dateOfBirth) {
+      errors.dateOfBirth = 'Date of birth is required.';
+    }
+
+    if (newStudent.passportUrl && newStudent.passportUrl.trim()) {
+      const url = newStudent.passportUrl.trim();
+      if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('data:image/')) {
+        errors.passportUrl = 'Photo URL must begin with https://, http://, or data:image/';
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setAddStudentErrors(errors);
+      triggerToast('Please correct validation errors in the student registration form.');
       return;
     }
+    setAddStudentErrors({});
 
     const defaultSubjects = subjectList.length > 0
       ? subjectList.map((s, idx) => ({
@@ -1853,6 +1966,28 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
   const handleSaveEditStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingStudent) return;
+
+    const errors: Record<string, string> = {};
+    const nameToVal = editingStudent.fullName || (editingStudent as any).name || '';
+    const nameRes = validateName(nameToVal, 'Student Name', 2, 80);
+    if (!nameRes.isValid && nameRes.error) {
+      errors.fullName = nameRes.error;
+    }
+    if (!editingStudent.dateOfBirth) {
+      errors.dateOfBirth = 'Date of birth is required.';
+    }
+    if (editingStudent.passportUrl && editingStudent.passportUrl.trim()) {
+      const url = editingStudent.passportUrl.trim();
+      if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('data:image/')) {
+        errors.passportUrl = 'Photo URL must begin with https://, http://, or data:image/';
+      }
+    }
+    if (Object.keys(errors).length > 0) {
+      setEditStudentErrors(errors);
+      triggerToast('Please correct validation errors in the student profile form.');
+      return;
+    }
+    setEditStudentErrors({});
 
     try {
       const calculatedAgeObj = calculateAgeFromDob(editingStudent.dateOfBirth);
@@ -2134,6 +2269,25 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
 
   const handleSaveSchoolHeader = (e: React.FormEvent) => {
     e.preventDefault();
+    const errors: Record<string, string> = {};
+    const nameRes = validateRequiredText(schoolHeader.schoolName, 'School Name', 2, 100);
+    if (!nameRes.isValid && nameRes.error) {
+      errors.schoolName = nameRes.error;
+    }
+    const titleRes = validateRequiredText(schoolHeader.reportTitle, 'Report Slip Title', 2, 100);
+    if (!titleRes.isValid && titleRes.error) {
+      errors.reportTitle = titleRes.error;
+    }
+    const addrRes = validateRequiredText(schoolHeader.addressSubtitle, 'Address & Subtitle', 5, 200);
+    if (!addrRes.isValid && addrRes.error) {
+      errors.addressSubtitle = addrRes.error;
+    }
+    if (Object.keys(errors).length > 0) {
+      setSchoolHeaderErrors(errors);
+      triggerToast('Please correct validation errors in the school header form.');
+      return;
+    }
+    setSchoolHeaderErrors({});
     try {
       localStorage.setItem('royal_academy_school_header', JSON.stringify(schoolHeader));
       triggerToast('School Name & Report Card Header saved successfully!');
@@ -4736,7 +4890,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleAddStudentSubmit} className="space-y-3.5">
+            <form onSubmit={handleAddStudentSubmit} noValidate className="space-y-3.5">
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Full Student Name *</label>
                 <input
@@ -4744,9 +4898,23 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                   required
                   placeholder="e.g. Adebayo Oluwaseun"
                   value={newStudent.name}
-                  onChange={(e) => setNewStudent({ ...newStudent, name: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
+                  onChange={(e) => {
+                    const lettersOnly = e.target.value.replace(/[0-9]/g, '');
+                    setNewStudent({ ...newStudent, name: lettersOnly });
+                    if (addStudentErrors.name) setAddStudentErrors({ ...addStudentErrors, name: '' });
+                  }}
+                  className={`w-full rounded-xl p-2.5 text-xs font-semibold focus:outline-none focus:ring-2 transition-all ${
+                    addStudentErrors.name
+                      ? 'border-2 border-red-500 bg-red-50/40 text-red-900 focus:ring-red-400'
+                      : 'bg-slate-50 border border-slate-200 text-slate-800 focus:ring-[#1E3A8A]'
+                  }`}
                 />
+                {addStudentErrors.name && (
+                  <p className="text-[10px] text-red-600 font-bold flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    <span>{addStudentErrors.name}</span>
+                  </p>
+                )}
               </div>
 
               <div>
@@ -4759,6 +4927,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                     onClick={() => {
                       const autoId = generateUnique7DigitRegId();
                       setNewStudent({ ...newStudent, studentId: autoId });
+                      if (addStudentErrors.studentId) setAddStudentErrors({ ...addStudentErrors, studentId: '' });
                       triggerToast(`Auto-generated unique 7-digit Reg ID: ${autoId}`);
                     }}
                     className="text-[10px] font-bold text-[#1E3A8A] hover:underline cursor-pointer flex items-center gap-1"
@@ -4776,9 +4945,20 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                   onChange={(e) => {
                     const digitsOnly = e.target.value.replace(/\D/g, '');
                     setNewStudent({ ...newStudent, studentId: digitsOnly });
+                    if (addStudentErrors.studentId) setAddStudentErrors({ ...addStudentErrors, studentId: '' });
                   }}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-mono font-bold text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
+                  className={`w-full rounded-xl p-2.5 text-xs font-mono font-bold focus:outline-none focus:ring-2 transition-all ${
+                    addStudentErrors.studentId
+                      ? 'border-2 border-red-500 bg-red-50/40 text-red-900 focus:ring-red-400'
+                      : 'bg-slate-50 border border-slate-200 text-[#0F172A] focus:ring-[#1E3A8A]'
+                  }`}
                 />
+                {addStudentErrors.studentId && (
+                  <p className="text-[10px] text-red-600 font-bold flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    <span>{addStudentErrors.studentId}</span>
+                  </p>
+                )}
               </div>
 
               <div>
@@ -4856,8 +5036,15 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                         dateOfBirth: formattedDateIso,
                         age: computedAgeText || newStudent.age,
                       });
+                      if (addStudentErrors.dateOfBirth) setAddStudentErrors({ ...addStudentErrors, dateOfBirth: '' });
                     }}
                   />
+                  {addStudentErrors.dateOfBirth && (
+                    <p className="text-[10px] text-red-600 font-bold flex items-center gap-1 mt-1">
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      <span>{addStudentErrors.dateOfBirth}</span>
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -4931,10 +5118,23 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                     type="url"
                     placeholder="or paste photo URL (https://...)"
                     value={newStudent.passportUrl}
-                    onChange={(e) => setNewStudent({ ...newStudent, passportUrl: e.target.value })}
-                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-mono text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
+                    onChange={(e) => {
+                      setNewStudent({ ...newStudent, passportUrl: e.target.value });
+                      if (addStudentErrors.passportUrl) setAddStudentErrors({ ...addStudentErrors, passportUrl: '' });
+                    }}
+                    className={`flex-1 rounded-xl p-2.5 text-xs font-mono focus:outline-none focus:ring-2 transition-all ${
+                      addStudentErrors.passportUrl
+                        ? 'border-2 border-red-500 bg-red-50/40 text-red-900 focus:ring-red-400'
+                        : 'bg-slate-50 border border-slate-200 text-[#0F172A] focus:ring-[#1E3A8A]'
+                    }`}
                   />
                 </div>
+                {addStudentErrors.passportUrl && (
+                  <p className="text-[10px] text-red-600 font-bold flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    <span>{addStudentErrors.passportUrl}</span>
+                  </p>
+                )}
                 
                 {/* Live Image Preview & Presets */}
                 <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center gap-3">
@@ -5026,16 +5226,30 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleSaveEditStudent} className="space-y-3.5">
+            <form onSubmit={handleSaveEditStudent} noValidate className="space-y-3.5">
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Full Student Name *</label>
                 <input
                   type="text"
                   required
                   value={editingStudent.fullName || (editingStudent as any).name || ''}
-                  onChange={(e) => setEditingStudent({ ...editingStudent, fullName: e.target.value, name: e.target.value } as any)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
+                  onChange={(e) => {
+                    const lettersOnly = e.target.value.replace(/[0-9]/g, '');
+                    setEditingStudent({ ...editingStudent, fullName: lettersOnly, name: lettersOnly } as any);
+                    if (editStudentErrors.fullName) setEditStudentErrors({ ...editStudentErrors, fullName: '' });
+                  }}
+                  className={`w-full rounded-xl p-2.5 text-xs font-semibold focus:outline-none focus:ring-2 transition-all ${
+                    editStudentErrors.fullName
+                      ? 'border-2 border-red-500 bg-red-50/40 text-red-900 focus:ring-red-400'
+                      : 'bg-slate-50 border border-slate-200 text-slate-800 focus:ring-[#1E3A8A]'
+                  }`}
                 />
+                {editStudentErrors.fullName && (
+                  <p className="text-[10px] text-red-600 font-bold flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    <span>{editStudentErrors.fullName}</span>
+                  </p>
+                )}
               </div>
 
               <div>
@@ -5113,8 +5327,15 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                         dateOfBirth: formattedDateIso,
                         age: computedAgeText || (editingStudent.age || ''),
                       });
+                      if (editStudentErrors.dateOfBirth) setEditStudentErrors({ ...editStudentErrors, dateOfBirth: '' });
                     }}
                   />
+                  {editStudentErrors.dateOfBirth && (
+                    <p className="text-[10px] text-red-600 font-bold flex items-center gap-1 mt-1">
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      <span>{editStudentErrors.dateOfBirth}</span>
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -5213,10 +5434,23 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                     type="url"
                     placeholder="or paste photo URL (https://...)"
                     value={editingStudent.passportUrl || ''}
-                    onChange={(e) => setEditingStudent({ ...editingStudent, passportUrl: e.target.value })}
-                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-mono text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
+                    onChange={(e) => {
+                      setEditingStudent({ ...editingStudent, passportUrl: e.target.value });
+                      if (editStudentErrors.passportUrl) setEditStudentErrors({ ...editStudentErrors, passportUrl: '' });
+                    }}
+                    className={`flex-1 rounded-xl p-2.5 text-xs font-mono focus:outline-none focus:ring-2 transition-all ${
+                      editStudentErrors.passportUrl
+                        ? 'border-2 border-red-500 bg-red-50/40 text-red-900 focus:ring-red-400'
+                        : 'bg-slate-50 border border-slate-200 text-[#0F172A] focus:ring-[#1E3A8A]'
+                    }`}
                   />
                 </div>
+                {editStudentErrors.passportUrl && (
+                  <p className="text-[10px] text-red-600 font-bold flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    <span>{editStudentErrors.passportUrl}</span>
+                  </p>
+                )}
 
                 {/* Live Image Preview & Quick Presets */}
                 <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center gap-3">
@@ -5324,7 +5558,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleSaveSchoolHeader} className="space-y-4">
+            <form onSubmit={handleSaveSchoolHeader} noValidate className="space-y-4">
               {/* School Name */}
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
@@ -5335,9 +5569,22 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                   required
                   placeholder="e.g. ROYAL ACADEMY"
                   value={schoolHeader.schoolName}
-                  onChange={(e) => setSchoolHeader({ ...schoolHeader, schoolName: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-black tracking-wide text-[#0F172A] uppercase font-serif focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
+                  onChange={(e) => {
+                    setSchoolHeader({ ...schoolHeader, schoolName: e.target.value });
+                    if (schoolHeaderErrors.schoolName) setSchoolHeaderErrors({ ...schoolHeaderErrors, schoolName: '' });
+                  }}
+                  className={`w-full rounded-xl p-2.5 text-xs font-black tracking-wide uppercase font-serif focus:outline-none focus:ring-2 transition-all ${
+                    schoolHeaderErrors.schoolName
+                      ? 'border-2 border-red-500 bg-red-50/40 text-red-900 focus:ring-red-400'
+                      : 'bg-slate-50 border border-slate-200 text-[#0F172A] focus:ring-[#1E3A8A]'
+                  }`}
                 />
+                {schoolHeaderErrors.schoolName && (
+                  <p className="text-[10px] text-red-600 font-bold flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    <span>{schoolHeaderErrors.schoolName}</span>
+                  </p>
+                )}
               </div>
 
               {/* Report Title */}
@@ -5350,9 +5597,22 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                   required
                   placeholder="e.g. Student Mid-Term Report"
                   value={schoolHeader.reportTitle}
-                  onChange={(e) => setSchoolHeader({ ...schoolHeader, reportTitle: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
+                  onChange={(e) => {
+                    setSchoolHeader({ ...schoolHeader, reportTitle: e.target.value });
+                    if (schoolHeaderErrors.reportTitle) setSchoolHeaderErrors({ ...schoolHeaderErrors, reportTitle: '' });
+                  }}
+                  className={`w-full rounded-xl p-2.5 text-xs font-bold focus:outline-none focus:ring-2 transition-all ${
+                    schoolHeaderErrors.reportTitle
+                      ? 'border-2 border-red-500 bg-red-50/40 text-red-900 focus:ring-red-400'
+                      : 'bg-slate-50 border border-slate-200 text-[#0F172A] focus:ring-[#1E3A8A]'
+                  }`}
                 />
+                {schoolHeaderErrors.reportTitle && (
+                  <p className="text-[10px] text-red-600 font-bold flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    <span>{schoolHeaderErrors.reportTitle}</span>
+                  </p>
+                )}
               </div>
 
               {/* Address / Subtitle */}
@@ -5365,9 +5625,22 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                   required
                   placeholder="e.g. Victoria Island, Lagos, Nigeria • Official Academic Record"
                   value={schoolHeader.addressSubtitle}
-                  onChange={(e) => setSchoolHeader({ ...schoolHeader, addressSubtitle: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-mono text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
+                  onChange={(e) => {
+                    setSchoolHeader({ ...schoolHeader, addressSubtitle: e.target.value });
+                    if (schoolHeaderErrors.addressSubtitle) setSchoolHeaderErrors({ ...schoolHeaderErrors, addressSubtitle: '' });
+                  }}
+                  className={`w-full rounded-xl p-2.5 text-xs font-mono focus:outline-none focus:ring-2 transition-all ${
+                    schoolHeaderErrors.addressSubtitle
+                      ? 'border-2 border-red-500 bg-red-50/40 text-red-900 focus:ring-red-400'
+                      : 'bg-slate-50 border border-slate-200 text-[#0F172A] focus:ring-[#1E3A8A]'
+                  }`}
                 />
+                {schoolHeaderErrors.addressSubtitle && (
+                  <p className="text-[10px] text-red-600 font-bold flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    <span>{schoolHeaderErrors.addressSubtitle}</span>
+                  </p>
+                )}
               </div>
 
               {/* Live Preview Box */}
@@ -5479,7 +5752,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleAddClassSubmit} className="space-y-3">
+            <form onSubmit={handleAddClassSubmit} noValidate className="space-y-3">
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Class Name</label>
                 <input
@@ -5487,9 +5760,22 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                   required
                   placeholder="e.g. JSS 1 Emerald or SSS 3 Science B"
                   value={newClass.name}
-                  onChange={(e) => setNewClass({ ...newClass, name: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-[#0F172A]"
+                  onChange={(e) => {
+                    setNewClass({ ...newClass, name: e.target.value });
+                    if (addClassErrors.name) setAddClassErrors({ ...addClassErrors, name: '' });
+                  }}
+                  className={`w-full rounded-xl p-2.5 text-xs font-bold transition-all focus:outline-none focus:ring-2 ${
+                    addClassErrors.name
+                      ? 'border-2 border-red-500 bg-red-50/40 text-red-900 focus:ring-red-400'
+                      : 'bg-slate-50 border border-slate-200 text-[#0F172A] focus:ring-[#1E3A8A]'
+                  }`}
                 />
+                {addClassErrors.name && (
+                  <p className="text-[10px] text-red-600 font-bold flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    <span>{addClassErrors.name}</span>
+                  </p>
+                )}
               </div>
 
               <div>
@@ -5497,32 +5783,59 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Emerald, Science B, Gold"
+                  placeholder="e.g. Emerald, Science B, Gold (no numbers)"
                   value={newClass.arm}
-                  onChange={(e) => setNewClass({ ...newClass, arm: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-semibold"
+                  onChange={(e) => {
+                    const lettersOnly = e.target.value.replace(/[0-9]/g, '');
+                    setNewClass({ ...newClass, arm: lettersOnly });
+                    if (addClassErrors.arm) setAddClassErrors({ ...addClassErrors, arm: '' });
+                  }}
+                  className={`w-full rounded-xl p-2.5 text-xs font-semibold transition-all focus:outline-none focus:ring-2 ${
+                    addClassErrors.arm
+                      ? 'border-2 border-red-500 bg-red-50/40 text-red-900 focus:ring-red-400'
+                      : 'bg-slate-50 border border-slate-200 text-slate-800 focus:ring-[#1E3A8A]'
+                  }`}
                 />
+                {addClassErrors.arm && (
+                  <p className="text-[10px] text-red-600 font-bold flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    <span>{addClassErrors.arm}</span>
+                  </p>
+                )}
               </div>
 
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Form Teacher Name</label>
                 <input
                   type="text"
-                  placeholder="e.g. Form Teacher Name"
+                  placeholder="e.g. Form Teacher Name (letters only)"
                   value={newClass.teacher}
-                  onChange={(e) => setNewClass({ ...newClass, teacher: e.target.value })}
+                  onChange={(e) => {
+                    const lettersOnly = e.target.value.replace(/[0-9]/g, '');
+                    setNewClass({ ...newClass, teacher: lettersOnly });
+                    if (addClassErrors.teacher) setAddClassErrors({ ...addClassErrors, teacher: '' });
+                  }}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-semibold"
                 />
+                {addClassErrors.teacher && (
+                  <p className="text-[10px] text-red-600 font-bold flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    <span>{addClassErrors.teacher}</span>
+                  </p>
+                )}
               </div>
 
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Maximum Student Capacity</label>
                 <input
-                  type="number"
-                  min="10"
-                  max="60"
+                  type="text"
+                  placeholder="35"
                   value={newClass.capacity}
-                  onChange={(e) => setNewClass({ ...newClass, capacity: Number(e.target.value) })}
+                  onChange={(e) => {
+                    const numOnly = e.target.value.replace(/\D/g, '').slice(0, 3);
+                    setNewClass({ ...newClass, capacity: Number(numOnly) || 0 });
+                    if (addClassErrors.capacity) setAddClassErrors({ ...addClassErrors, capacity: '' });
+                  }}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-mono font-bold"
                 />
               </div>
@@ -5645,17 +5958,31 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleAddSubjectSubmit} className="space-y-3">
+            <form onSubmit={handleAddSubjectSubmit} noValidate className="space-y-3">
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Subject Title</label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Further Mathematics or Computer Studies"
+                  placeholder="e.g. Further Mathematics or Computer Studies (letters only)"
                   value={newSubject.name}
-                  onChange={(e) => setNewSubject({ ...newSubject, name: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-[#0F172A]"
+                  onChange={(e) => {
+                    const lettersOnly = e.target.value.replace(/[0-9]/g, '');
+                    setNewSubject({ ...newSubject, name: lettersOnly });
+                    if (addSubjectErrors.name) setAddSubjectErrors({ ...addSubjectErrors, name: '' });
+                  }}
+                  className={`w-full rounded-xl p-2.5 text-xs font-bold transition-all focus:outline-none focus:ring-2 ${
+                    addSubjectErrors.name
+                      ? 'border-2 border-red-500 bg-red-50/40 text-red-900 focus:ring-red-400'
+                      : 'bg-slate-50 border border-slate-200 text-[#0F172A] focus:ring-[#1E3A8A]'
+                  }`}
                 />
+                {addSubjectErrors.name && (
+                  <p className="text-[10px] text-red-600 font-bold flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    <span>{addSubjectErrors.name}</span>
+                  </p>
+                )}
               </div>
 
               <div>
@@ -5677,11 +6004,21 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                 <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Lead Instructor Name</label>
                 <input
                   type="text"
-                  placeholder="e.g. Dr. M. Chen"
+                  placeholder="e.g. Dr. M. Chen (letters only)"
                   value={newSubject.teacher}
-                  onChange={(e) => setNewSubject({ ...newSubject, teacher: e.target.value })}
+                  onChange={(e) => {
+                    const lettersOnly = e.target.value.replace(/[0-9]/g, '');
+                    setNewSubject({ ...newSubject, teacher: lettersOnly });
+                    if (addSubjectErrors.teacher) setAddSubjectErrors({ ...addSubjectErrors, teacher: '' });
+                  }}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-semibold"
                 />
+                {addSubjectErrors.teacher && (
+                  <p className="text-[10px] text-red-600 font-bold flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    <span>{addSubjectErrors.teacher}</span>
+                  </p>
+                )}
               </div>
 
               <div className="pt-2 flex justify-end gap-2">
@@ -5743,17 +6080,32 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleAddSessionSubmit} className="space-y-3">
+            <form onSubmit={handleAddSessionSubmit} noValidate className="space-y-3">
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Session Year</label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. 2026/2027"
+                  maxLength={9}
+                  placeholder="e.g. 2026/2027 (numbers & / only)"
                   value={newSession.year}
-                  onChange={(e) => setNewSession({ ...newSession, year: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-[#1E3A8A]"
+                  onChange={(e) => {
+                    const numbersAndSlashOnly = e.target.value.replace(/[^0-9/]/g, '').slice(0, 9);
+                    setNewSession({ ...newSession, year: numbersAndSlashOnly });
+                    if (addSessionErrors.year) setAddSessionErrors({ ...addSessionErrors, year: '' });
+                  }}
+                  className={`w-full rounded-xl p-2.5 text-xs font-bold transition-all focus:outline-none focus:ring-2 ${
+                    addSessionErrors.year
+                      ? 'border-2 border-red-500 bg-red-50/40 text-red-900 focus:ring-red-400'
+                      : 'bg-slate-50 border border-slate-200 text-[#1E3A8A] focus:ring-[#1E3A8A]'
+                  }`}
                 />
+                {addSessionErrors.year && (
+                  <p className="text-[10px] text-red-600 font-bold flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    <span>{addSessionErrors.year}</span>
+                  </p>
+                )}
               </div>
 
               <div>
@@ -5822,16 +6174,32 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleUpdateSessionSubmit} className="space-y-3">
+            <form onSubmit={handleUpdateSessionSubmit} noValidate className="space-y-3">
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Session Year</label>
                 <input
                   type="text"
                   required
+                  maxLength={9}
+                  placeholder="e.g. 2026/2027 (numbers & / only)"
                   value={editSessionCandidate.year}
-                  onChange={(e) => setEditSessionCandidate({ ...editSessionCandidate, year: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-[#1E3A8A]"
+                  onChange={(e) => {
+                    const numbersAndSlashOnly = e.target.value.replace(/[^0-9/]/g, '').slice(0, 9);
+                    setEditSessionCandidate({ ...editSessionCandidate, year: numbersAndSlashOnly });
+                    if (editSessionErrors.year) setEditSessionErrors({ ...editSessionErrors, year: '' });
+                  }}
+                  className={`w-full rounded-xl p-2.5 text-xs font-bold transition-all focus:outline-none focus:ring-2 ${
+                    editSessionErrors.year
+                      ? 'border-2 border-red-500 bg-red-50/40 text-red-900 focus:ring-red-400'
+                      : 'bg-slate-50 border border-slate-200 text-[#1E3A8A] focus:ring-[#1E3A8A]'
+                  }`}
                 />
+                {editSessionErrors.year && (
+                  <p className="text-[10px] text-red-600 font-bold flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    <span>{editSessionErrors.year}</span>
+                  </p>
+                )}
               </div>
 
               <div>
@@ -5926,17 +6294,31 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleAddTermSubmit} className="space-y-3">
+            <form onSubmit={handleAddTermSubmit} noValidate className="space-y-3">
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Term Name</label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. First Term (Fall) or Summer Session"
+                  placeholder="e.g. First Term, Second Term (words only)"
                   value={newTerm.name}
-                  onChange={(e) => setNewTerm({ ...newTerm, name: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-[#1E3A8A]"
+                  onChange={(e) => {
+                    const lettersOnly = e.target.value.replace(/[0-9]/g, '');
+                    setNewTerm({ ...newTerm, name: lettersOnly });
+                    if (addTermErrors.name) setAddTermErrors({ ...addTermErrors, name: '' });
+                  }}
+                  className={`w-full rounded-xl p-2.5 text-xs font-bold transition-all focus:outline-none focus:ring-2 ${
+                    addTermErrors.name
+                      ? 'border-2 border-red-500 bg-red-50/40 text-red-900 focus:ring-red-400'
+                      : 'bg-slate-50 border border-slate-200 text-[#1E3A8A] focus:ring-[#1E3A8A]'
+                  }`}
                 />
+                {addTermErrors.name && (
+                  <p className="text-[10px] text-red-600 font-bold flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    <span>{addTermErrors.name}</span>
+                  </p>
+                )}
               </div>
 
               <div>
@@ -5994,16 +6376,31 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleUpdateTermSubmit} className="space-y-3">
+            <form onSubmit={handleUpdateTermSubmit} noValidate className="space-y-3">
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Term Name</label>
                 <input
                   type="text"
                   required
+                  placeholder="e.g. First Term, Second Term (words only)"
                   value={editTermCandidate.name}
-                  onChange={(e) => setEditTermCandidate({ ...editTermCandidate, name: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-[#1E3A8A]"
+                  onChange={(e) => {
+                    const lettersOnly = e.target.value.replace(/[0-9]/g, '');
+                    setEditTermCandidate({ ...editTermCandidate, name: lettersOnly });
+                    if (editTermErrors.name) setEditTermErrors({ ...editTermErrors, name: '' });
+                  }}
+                  className={`w-full rounded-xl p-2.5 text-xs font-bold transition-all focus:outline-none focus:ring-2 ${
+                    editTermErrors.name
+                      ? 'border-2 border-red-500 bg-red-50/40 text-red-900 focus:ring-red-400'
+                      : 'bg-slate-50 border border-slate-200 text-[#1E3A8A] focus:ring-[#1E3A8A]'
+                  }`}
                 />
+                {editTermErrors.name && (
+                  <p className="text-[10px] text-red-600 font-bold flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    <span>{editTermErrors.name}</span>
+                  </p>
+                )}
               </div>
 
               <div>

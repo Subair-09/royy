@@ -43,23 +43,35 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+
+  const validateEmailInput = (val: string) => {
+    const clean = val.trim();
+    const adminEmailRegex =
+      /^[a-zA-Z0-9_%+-]+(?:\.[a-zA-Z0-9_%+-]+)*@(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/;
+    if (!clean || !adminEmailRegex.test(clean)) {
+      return 'Please enter a valid administrator email address';
+    }
+    return null;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
     setSuccessMessage(null);
 
+    const emailErr = validateEmailInput(email);
+    const passErr = !password.trim() ? 'Please enter your password.' : null;
+
+    setEmailError(emailErr);
+    setPasswordError(passErr);
+
+    if (emailErr || passErr) {
+      return;
+    }
+
     const cleanEmail = email.trim().toLowerCase();
-
-    if (!cleanEmail || !cleanEmail.includes('@')) {
-      setErrorMessage('Please enter a valid administrator email address.');
-      return;
-    }
-
-    if (!password) {
-      setErrorMessage('Please enter your password.');
-      return;
-    }
-
     setIsLoading(true);
 
     try {
@@ -197,37 +209,72 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
               )}
 
               {/* Login Form */}
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-4" noValidate>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
-                    Staff Email Address
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                      Staff Email Address
+                    </label>
+                    {emailError && (
+                      <span className="text-[10px] text-red-600 font-semibold flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" />
+                        {emailError}
+                      </span>
+                    )}
+                  </div>
                   <div className="relative">
                     <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                     <input
                       type="email"
                       required
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        if (emailError) setEmailError(null);
+                      }}
+                      onBlur={() => {
+                        if (email.trim()) {
+                          setEmailError(validateEmailInput(email));
+                        }
+                      }}
                       placeholder="e.g. yourname@faithacademy.edu.ng"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 py-2.5 text-xs font-semibold text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-[#1E3A8A] focus:ring-2 focus:ring-[#1E3A8A]/10 shadow-xs"
+                      className={`w-full border rounded-xl pl-10 pr-3.5 py-2.5 text-xs font-semibold text-slate-900 placeholder-slate-400 focus:outline-none transition-all shadow-xs ${
+                        emailError
+                          ? 'bg-red-50/40 border-red-400 focus:ring-2 focus:ring-red-500/20'
+                          : 'bg-slate-50 border-slate-200 focus:bg-white focus:border-[#1E3A8A] focus:ring-2 focus:ring-[#1E3A8A]/10'
+                      }`}
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
-                    Account Password
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                      Account Password
+                    </label>
+                    {passwordError && (
+                      <span className="text-[10px] text-red-600 font-semibold flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" />
+                        {passwordError}
+                      </span>
+                    )}
+                  </div>
                   <div className="relative">
                     <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                     <input
                       type={showPassword ? 'text' : 'password'}
                       required
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={(e) => {
+                        setPassword(e.target.value);
+                        if (passwordError) setPasswordError(null);
+                      }}
                       placeholder="••••••••••••"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-10 py-2.5 text-xs font-mono font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-[#1E3A8A] focus:ring-2 focus:ring-[#1E3A8A]/10 shadow-xs"
+                      className={`w-full border rounded-xl pl-10 pr-10 py-2.5 text-xs font-mono font-bold text-slate-900 placeholder-slate-400 focus:outline-none transition-all shadow-xs ${
+                        passwordError
+                          ? 'bg-red-50/40 border-red-400 focus:ring-2 focus:ring-red-500/20'
+                          : 'bg-slate-50 border-slate-200 focus:bg-white focus:border-[#1E3A8A] focus:ring-2 focus:ring-[#1E3A8A]/10'
+                      }`}
                     />
                     <button
                       type="button"

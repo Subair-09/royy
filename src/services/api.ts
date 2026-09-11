@@ -405,18 +405,18 @@ export const api = {
     }
   },
 
-  async resetAdminPassword(id: string, temporaryPassword?: string): Promise<{ success: boolean; message?: string; admin?: any }> {
+  async resetAdminPassword(id: string, temporaryPassword?: string): Promise<{ success: boolean; message?: string; error?: string; admin?: any }> {
     try {
       const res = await fetch(`/api/admins/${encodeURIComponent(id)}/reset-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ temporaryPassword }),
       });
-      if (!res.ok) return { success: false };
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return { success: false, error: data.error || 'Failed to reset password.' };
       return { success: true, message: data.message, admin: data.admin };
-    } catch {
-      return { success: false };
+    } catch (e: any) {
+      return { success: false, error: e.message || 'Network error.' };
     }
   },
 

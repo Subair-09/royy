@@ -41,6 +41,12 @@ import {
   isUserSuperAdmin,
   ALL_ADMIN_MODULES
 } from '../utils/adminPermissions';
+import {
+  validateEmail,
+  validateName,
+  validatePhone,
+  validatePassword,
+} from '../utils/formValidation';
 
 interface AdminStaffManagementProps {
   currentAdmin: {
@@ -110,6 +116,10 @@ export const AdminStaffManagement: React.FC<AdminStaffManagementProps> = ({
     permissions?: AdminModulePermission[];
   } | null>(null);
 
+  const [addFormErrors, setAddFormErrors] = useState<Record<string, string>>({});
+  const [editFormErrors, setEditFormErrors] = useState<Record<string, string>>({});
+  const [resetFormErrors, setResetFormErrors] = useState<Record<string, string>>({});
+
   const isSuperAdmin = isUserSuperAdmin(currentAdmin);
 
   const loadAdmins = async () => {
@@ -142,6 +152,7 @@ export const AdminStaffManagement: React.FC<AdminStaffManagementProps> = ({
 
   const handleOpenAddModal = () => {
     const initialRole = 'Teacher / Exam Officer';
+    setAddFormErrors({});
     setFormData({
       name: '',
       email: '',
@@ -167,16 +178,29 @@ export const AdminStaffManagement: React.FC<AdminStaffManagementProps> = ({
 
   const handleCreateAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name || !formData.email || !formData.password) {
-      onTriggerToast('Please fill in all required fields (Name, Email, Password).');
+    const errors: Record<string, string> = {};
+
+    const nameRes = validateName(formData.name, 'Full Staff Name', 2, 80);
+    if (!nameRes.isValid && nameRes.error) errors.name = nameRes.error;
+
+    const emailRes = validateEmail(formData.email, true);
+    if (!emailRes.isValid && emailRes.error) errors.email = emailRes.error;
+
+    const passRes = validatePassword(formData.password || '', 'Initial Password', 6);
+    if (!passRes.isValid && passRes.error) errors.password = passRes.error;
+
+    if (formData.phone && formData.phone.trim()) {
+      const phoneRes = validatePhone(formData.phone, false);
+      if (!phoneRes.isValid && phoneRes.error) errors.phone = phoneRes.error;
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setAddFormErrors(errors);
+      onTriggerToast('Please correct the validation errors in the staff form.');
       return;
     }
 
-    if (formData.password.length < 6) {
-      onTriggerToast('Initial password must be at least 6 characters.');
-      return;
-    }
-
+    setAddFormErrors({});
     setIsSaving(true);
     try {
       const res = await api.createAdmin({
@@ -192,7 +216,7 @@ export const AdminStaffManagement: React.FC<AdminStaffManagementProps> = ({
           name: res.admin.name,
           email: res.admin.email,
           role: res.admin.role,
-          temporaryPassword: formData.password,
+          temporaryPassword: formData.password || '',
           permissions: res.admin.permissions || formData.permissions,
         });
         onTriggerToast(`Staff account for "${res.admin.name}" created successfully!`);
@@ -208,6 +232,7 @@ export const AdminStaffManagement: React.FC<AdminStaffManagementProps> = ({
 
   const handleOpenEditModal = (admin: AdminAccount) => {
     setSelectedAdmin(admin);
+    setEditFormErrors({});
     const existingPerms = resolveAdminPermissions(admin.role, admin.permissions);
     setFormData({
       name: admin.name,
@@ -226,6 +251,22 @@ export const AdminStaffManagement: React.FC<AdminStaffManagementProps> = ({
     e.preventDefault();
     if (!selectedAdmin) return;
 
+    const errors: Record<string, string> = {};
+    const nameRes = validateName(formData.name, 'Full Staff Name', 2, 80);
+    if (!nameRes.isValid && nameRes.error) errors.name = nameRes.error;
+
+    if (formData.phone && formData.phone.trim()) {
+      const phoneRes = validatePhone(formData.phone, false);
+      if (!phoneRes.isValid && phoneRes.error) errors.phone = phoneRes.error;
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setEditFormErrors(errors);
+      onTriggerToast('Please correct the validation errors before updating.');
+      return;
+    }
+
+    setEditFormErrors({});
     setIsSaving(true);
     try {
       const res = await api.updateAdmin(selectedAdmin.id || selectedAdmin.email, {
@@ -259,6 +300,7 @@ export const AdminStaffManagement: React.FC<AdminStaffManagementProps> = ({
 
   const handleOpenResetModal = (admin: AdminAccount) => {
     setSelectedAdmin(admin);
+    setResetFormErrors({});
     setNewTempPassword(generateRandomPassword());
     setShowTempPassword(false);
     setIsResetModalOpen(true);
@@ -266,8 +308,18 @@ export const AdminStaffManagement: React.FC<AdminStaffManagementProps> = ({
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedAdmin || !newTempPassword) return;
+    if (!selectedAdmin) return;
 
+    const errors: Record<string, string> = {};
+    const passRes = validatePassword(newTempPassword, 'Temporary Password', 6);
+    if (!passRes.isValid && passRes.error) errors.password = passRes.error;
+
+    if (Object.keys(errors).length > 0) {
+      setResetFormErrors(errors);
+      return;
+    }
+
+    setResetFormErrors({});
     setIsSaving(true);
     try {
       const res = await api.resetAdminPassword(
@@ -299,10 +351,10 @@ export const AdminStaffManagement: React.FC<AdminStaffManagementProps> = ({
           `Password reset for "${selectedAdmin.name}". They will be forced to change it on next login.`
         );
       } else {
-        onTriggerToast('Failed to reset password.');
+        onTriggerToast(res.error || 'Failed to reset password.');
       }
     } catch (err: any) {
-      onTriggerToast(err.message || 'Error resetting password.');
+      onTriggerToast(err.message || 'Password reset failed.');
     } finally {
       setIsSaving(false);
     }
@@ -853,34 +905,66 @@ export const AdminStaffManagement: React.FC<AdminStaffManagementProps> = ({
             </div>
 
             {/* Form */}
-            <form onSubmit={handleCreateAdmin} className="space-y-4">
+            <form onSubmit={handleCreateAdmin} className="space-y-4" noValidate>
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1 uppercase tracking-wider">
-                  Full Staff Name *
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Full Staff Name *
+                  </label>
+                  {addFormErrors.name && (
+                    <span className="text-[10px] text-red-600 font-semibold flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      {addFormErrors.name}
+                    </span>
+                  )}
+                </div>
                 <input
                   type="text"
                   required
                   value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  onChange={(e) => {
+                    // Only allow alphabet letters, spaces, hyphens, and apostrophes (no numbers)
+                    const lettersOnly = e.target.value.replace(/[0-9]/g, '');
+                    setFormData({ ...formData, name: lettersOnly });
+                    if (addFormErrors.name) setAddFormErrors((prev) => ({ ...prev, name: '' }));
+                  }}
                   placeholder="e.g. Staff Full Name (e.g. Mr. John Doe)"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs font-bold focus:outline-none transition-all ${
+                    addFormErrors.name
+                      ? 'border-red-400 bg-red-50/40 focus:ring-2 focus:ring-red-500/20'
+                      : 'border-slate-300 focus:ring-2 focus:ring-[#1E3A8A]'
+                  }`}
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1 uppercase tracking-wider">
-                  Staff Email Address (Login ID) *
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Staff Email Address (Login ID) *
+                  </label>
+                  {addFormErrors.email && (
+                    <span className="text-[10px] text-red-600 font-semibold flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      {addFormErrors.email}
+                    </span>
+                  )}
+                </div>
                 <div className="relative">
                   <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="email"
                     required
                     value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    onChange={(e) => {
+                      setFormData({ ...formData, email: e.target.value });
+                      if (addFormErrors.email) setAddFormErrors((prev) => ({ ...prev, email: '' }));
+                    }}
                     placeholder="e.g. staff.name@faithacademy.edu.ng"
-                    className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
+                    className={`w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs font-bold focus:outline-none transition-all ${
+                      addFormErrors.email
+                        ? 'border-red-400 bg-red-50/40 focus:ring-2 focus:ring-red-500/20'
+                        : 'border-slate-300 focus:ring-2 focus:ring-[#1E3A8A]'
+                    }`}
                   />
                 </div>
               </div>
@@ -904,15 +988,33 @@ export const AdminStaffManagement: React.FC<AdminStaffManagementProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1 uppercase tracking-wider">
-                    Phone Number (Optional)
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                      Phone Number (11 Digits, Optional)
+                    </label>
+                    {addFormErrors.phone && (
+                      <span className="text-[10px] text-red-600 font-semibold flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" />
+                        {addFormErrors.phone}
+                      </span>
+                    )}
+                  </div>
                   <input
-                    type="text"
+                    type="tel"
+                    maxLength={11}
                     value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    placeholder="e.g. +234 803 000 1122"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
+                    onChange={(e) => {
+                      // Only allow numeric digits, max 11 digits
+                      const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 11);
+                      setFormData({ ...formData, phone: digitsOnly });
+                      if (addFormErrors.phone) setAddFormErrors((prev) => ({ ...prev, phone: '' }));
+                    }}
+                    placeholder="e.g. 08012345678 (11 digits)"
+                    className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs font-bold focus:outline-none transition-all ${
+                      addFormErrors.phone
+                        ? 'border-red-400 bg-red-50/40 focus:ring-2 focus:ring-red-500/20'
+                        : 'border-slate-300 focus:ring-2 focus:ring-[#1E3A8A]'
+                    }`}
                   />
                 </div>
               </div>
@@ -990,8 +1092,15 @@ export const AdminStaffManagement: React.FC<AdminStaffManagementProps> = ({
                     type={showPasswordInput ? 'text' : 'password'}
                     required
                     value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    className="w-full pl-10 pr-10 py-2.5 bg-white border border-amber-300 rounded-xl text-xs font-mono font-bold text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
+                    onChange={(e) => {
+                      setFormData({ ...formData, password: e.target.value });
+                      if (addFormErrors.password) setAddFormErrors((prev) => ({ ...prev, password: '' }));
+                    }}
+                    className={`w-full pl-10 pr-10 py-2.5 bg-white border rounded-xl text-xs font-mono font-bold text-[#0F172A] focus:outline-none transition-all ${
+                      addFormErrors.password
+                        ? 'border-red-500 bg-red-50/40 focus:ring-2 focus:ring-red-500/20'
+                        : 'border-amber-300 focus:ring-2 focus:ring-[#1E3A8A]'
+                    }`}
                   />
                   <button
                     type="button"
@@ -1001,6 +1110,12 @@ export const AdminStaffManagement: React.FC<AdminStaffManagementProps> = ({
                     {showPasswordInput ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+                {addFormErrors.password && (
+                  <span className="text-[10px] text-red-600 font-semibold flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    {addFormErrors.password}
+                  </span>
+                )}
 
                 <div className="flex items-start gap-2 pt-1 text-[11px] text-amber-800">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
@@ -1131,7 +1246,7 @@ export const AdminStaffManagement: React.FC<AdminStaffManagementProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleResetPassword} className="space-y-4">
+            <form onSubmit={handleResetPassword} className="space-y-4" noValidate>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
@@ -1139,7 +1254,10 @@ export const AdminStaffManagement: React.FC<AdminStaffManagementProps> = ({
                   </label>
                   <button
                     type="button"
-                    onClick={() => setNewTempPassword(generateRandomPassword())}
+                    onClick={() => {
+                      setNewTempPassword(generateRandomPassword());
+                      if (resetFormErrors.password) setResetFormErrors({});
+                    }}
                     className="text-[11px] text-[#1E3A8A] hover:underline font-bold flex items-center gap-1 cursor-pointer"
                   >
                     <Sparkles className="w-3 h-3 text-[#F59E0B]" />
@@ -1153,8 +1271,15 @@ export const AdminStaffManagement: React.FC<AdminStaffManagementProps> = ({
                     type={showTempPassword ? 'text' : 'password'}
                     required
                     value={newTempPassword}
-                    onChange={(e) => setNewTempPassword(e.target.value)}
-                    className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
+                    onChange={(e) => {
+                      setNewTempPassword(e.target.value);
+                      if (resetFormErrors.password) setResetFormErrors({});
+                    }}
+                    className={`w-full pl-10 pr-10 py-2.5 bg-slate-50 border rounded-xl text-xs font-mono font-bold focus:outline-none transition-all ${
+                      resetFormErrors.password
+                        ? 'border-red-500 bg-red-50/40 focus:ring-2 focus:ring-red-500/20'
+                        : 'border-slate-300 focus:ring-2 focus:ring-[#1E3A8A]'
+                    }`}
                   />
                   <button
                     type="button"
@@ -1164,6 +1289,12 @@ export const AdminStaffManagement: React.FC<AdminStaffManagementProps> = ({
                     {showTempPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+                {resetFormErrors.password && (
+                  <span className="text-[10px] text-red-600 font-semibold flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    {resetFormErrors.password}
+                  </span>
+                )}
               </div>
 
               <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900 flex items-start gap-2">
@@ -1220,17 +1351,33 @@ export const AdminStaffManagement: React.FC<AdminStaffManagementProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleUpdateAdmin} className="space-y-4">
+            <form onSubmit={handleUpdateAdmin} className="space-y-4" noValidate>
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1 uppercase tracking-wider">
-                  Full Name
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Full Name *
+                  </label>
+                  {editFormErrors.name && (
+                    <span className="text-[10px] text-red-600 font-semibold flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      {editFormErrors.name}
+                    </span>
+                  )}
+                </div>
                 <input
                   type="text"
                   required
                   value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
+                  onChange={(e) => {
+                    const lettersOnly = e.target.value.replace(/[0-9]/g, '');
+                    setFormData({ ...formData, name: lettersOnly });
+                    if (editFormErrors.name) setEditFormErrors((prev) => ({ ...prev, name: '' }));
+                  }}
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs font-bold focus:outline-none transition-all ${
+                    editFormErrors.name
+                      ? 'border-red-400 bg-red-50/40 focus:ring-2 focus:ring-red-500/20'
+                      : 'border-slate-300 focus:ring-2 focus:ring-[#1E3A8A]'
+                  }`}
                 />
               </div>
 
@@ -1290,15 +1437,32 @@ export const AdminStaffManagement: React.FC<AdminStaffManagementProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1 uppercase tracking-wider">
-                  Phone Number
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Phone Number (11 Digits, Optional)
+                  </label>
+                  {editFormErrors.phone && (
+                    <span className="text-[10px] text-red-600 font-semibold flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      {editFormErrors.phone}
+                    </span>
+                  )}
+                </div>
                 <input
-                  type="text"
+                  type="tel"
+                  maxLength={11}
                   value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  placeholder="e.g. +234 803 000 1122"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
+                  onChange={(e) => {
+                    const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 11);
+                    setFormData({ ...formData, phone: digitsOnly });
+                    if (editFormErrors.phone) setEditFormErrors((prev) => ({ ...prev, phone: '' }));
+                  }}
+                  placeholder="e.g. 08012345678 (11 digits)"
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs font-bold focus:outline-none transition-all ${
+                    editFormErrors.phone
+                      ? 'border-red-400 bg-red-50/40 focus:ring-2 focus:ring-red-500/20'
+                      : 'border-slate-300 focus:ring-2 focus:ring-[#1E3A8A]'
+                  }`}
                 />
               </div>
 

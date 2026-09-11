@@ -86,21 +86,34 @@ export const AdminDashboardPreview: React.FC<AdminDashboardPreviewProps> = ({
     { id: 'analytics', label: 'Reports & Analytics', icon: BarChart3 },
   ];
 
+  const [emailFieldErr, setEmailFieldErr] = useState<string | null>(null);
+  const [passFieldErr, setPassFieldErr] = useState<string | null>(null);
+
   const handleInlineLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError(null);
-
-    if (!loginEmail || !loginEmail.includes('@')) {
-      setAuthError('Please enter a valid administrator email.');
-      return;
-    }
-
-    if (!loginPassword || loginPassword.length < 4) {
-      setAuthError('Password must be at least 4 characters long.');
-      return;
-    }
+    setEmailFieldErr(null);
+    setPassFieldErr(null);
 
     const cleanEmail = loginEmail.trim().toLowerCase();
+    let hasErr = false;
+
+    const adminEmailRegex =
+      /^[a-zA-Z0-9_%+-]+(?:\.[a-zA-Z0-9_%+-]+)*@(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/;
+
+    if (!cleanEmail || !adminEmailRegex.test(cleanEmail)) {
+      setEmailFieldErr('Please enter a valid administrator email address');
+      hasErr = true;
+    }
+
+    if (!loginPassword.trim()) {
+      setPassFieldErr('Password is required.');
+      hasErr = true;
+    }
+
+    if (hasErr) {
+      return;
+    }
 
     setIsAuthenticating(true);
     try {
@@ -208,37 +221,65 @@ export const AdminDashboardPreview: React.FC<AdminDashboardPreviewProps> = ({
                 </div>
               )}
 
-              <form onSubmit={handleInlineLogin} className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/90 text-left space-y-4 shadow-xl text-slate-900">
+              <form onSubmit={handleInlineLogin} className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/90 text-left space-y-4 shadow-xl text-slate-900" noValidate>
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1 uppercase tracking-wider">
-                    Admin Email Address
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                      Admin Email Address
+                    </label>
+                    {emailFieldErr && (
+                      <span className="text-[10px] text-red-600 font-semibold">
+                        {emailFieldErr}
+                      </span>
+                    )}
+                  </div>
                   <div className="relative">
                     <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                     <input
                       type="email"
                       required
                       value={loginEmail}
-                      onChange={(e) => setLoginEmail(e.target.value)}
+                      onChange={(e) => {
+                        setLoginEmail(e.target.value);
+                        if (emailFieldErr) setEmailFieldErr(null);
+                      }}
                       placeholder="admin@faithacademy.edu.ng"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 py-2.5 text-xs font-semibold text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-[#1E3A8A] focus:ring-2 focus:ring-[#1E3A8A]/10"
+                      className={`w-full border rounded-xl pl-10 pr-3.5 py-2.5 text-xs font-semibold text-slate-900 placeholder-slate-400 focus:outline-none transition-all ${
+                        emailFieldErr
+                          ? 'border-red-400 bg-red-50/40 focus:ring-2 focus:ring-red-500/20'
+                          : 'bg-slate-50 border-slate-200 focus:bg-white focus:border-[#1E3A8A] focus:ring-2 focus:ring-[#1E3A8A]/10'
+                      }`}
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1 uppercase tracking-wider">
-                    Password
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                      Password
+                    </label>
+                    {passFieldErr && (
+                      <span className="text-[10px] text-red-600 font-semibold">
+                        {passFieldErr}
+                      </span>
+                    )}
+                  </div>
                   <div className="relative">
                     <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                     <input
                       type={showPassword ? 'text' : 'password'}
                       required
                       value={loginPassword}
-                      onChange={(e) => setLoginPassword(e.target.value)}
+                      onChange={(e) => {
+                        setLoginPassword(e.target.value);
+                        if (passFieldErr) setPassFieldErr(null);
+                      }}
                       placeholder="••••••••••••"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-10 py-2.5 text-xs font-mono font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-[#1E3A8A] focus:ring-2 focus:ring-[#1E3A8A]/10"
+                      className={`w-full border rounded-xl pl-10 pr-10 py-2.5 text-xs font-mono font-bold text-slate-900 placeholder-slate-400 focus:outline-none transition-all ${
+                        passFieldErr
+                          ? 'border-red-400 bg-red-50/40 focus:ring-2 focus:ring-red-500/20'
+                          : 'bg-slate-50 border-slate-200 focus:bg-white focus:border-[#1E3A8A] focus:ring-2 focus:ring-[#1E3A8A]/10'
+                      }`}
                     />
                     <button
                       type="button"
