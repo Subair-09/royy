@@ -1,13 +1,14 @@
 export interface SubjectGrade {
   id: string;
   subject: string;
-  caScore: number; // e.g. 30/30 or 40/40
-  examScore: number; // e.g. 70/70 or 60/60
-  ca1?: number;
-  ca2?: number;
-  midterm?: number;
-  exam?: number;
-  total: number; // e.g. 100
+  caScore: number; // e.g. 20 (CA 10 + Midterm 10)
+  examScore: number; // e.g. 80
+  ca?: number; // CA (10) - max 10
+  ca1?: number; // legacy alias
+  ca2?: number; // legacy alias
+  midterm?: number; // MIDTERM (10) - max 10
+  exam?: number; // EXAM (80) - max 80
+  total: number; // CA(10) + MIDTERM(10) + EXAM(80) = Total (100)
   grade: 'A1' | 'B2' | 'B3' | 'C4' | 'C5' | 'C6' | 'D7' | 'E8' | 'F9' | string;
   remark: 'EXCELLENT' | 'VERY GOOD' | 'GOOD' | 'CREDIT' | 'PASS' | 'FAIR' | 'POOR' | 'FAIL' | string;
   creditHours?: number;

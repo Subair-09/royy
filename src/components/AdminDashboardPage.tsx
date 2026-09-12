@@ -343,8 +343,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
   const [scoreEntries, setScoreEntries] = useState<Array<{
     id: string;
     name: string;
-    ca1: number;
-    ca2: number;
+    ca: number;
     midterm: number;
     exam: number;
   }>>([]);
@@ -387,23 +386,18 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
         );
       }
 
-      let ca1 = existingSub?.ca1 !== undefined ? Number(existingSub.ca1) : 0;
-      let ca2 = existingSub?.ca2 !== undefined ? Number(existingSub.ca2) : 0;
-      let midterm = existingSub?.midterm !== undefined ? Number(existingSub.midterm) : 0;
+      let ca = existingSub?.ca !== undefined ? Number(existingSub.ca) : (existingSub?.ca1 !== undefined ? Number(existingSub.ca1) : (existingSub?.caScore !== undefined ? Math.min(10, Number(existingSub.caScore)) : 0));
+      let midterm = existingSub?.midterm !== undefined ? Math.min(10, Number(existingSub.midterm)) : 0;
       let exam = (existingSub?.examScore !== undefined ? Number(existingSub.examScore) : (existingSub?.exam !== undefined ? Number(existingSub.exam) : 0));
 
-      if (existingSub && existingSub.caScore !== undefined && ca1 === 0 && ca2 === 0 && midterm === 0) {
-        const totalCa = Number(existingSub.caScore) || 0;
-        midterm = Math.min(20, Math.floor(totalCa * 0.5));
-        ca1 = Math.min(10, Math.floor((totalCa - midterm) / 2));
-        ca2 = Math.min(10, totalCa - midterm - ca1);
-      }
+      ca = Math.min(10, Math.max(0, ca));
+      midterm = Math.min(10, Math.max(0, midterm));
+      exam = Math.min(80, Math.max(0, exam));
 
       return {
         id: st.studentId,
         name: st.fullName || st.name || 'Student',
-        ca1,
-        ca2,
+        ca,
         midterm,
         exam,
       };
@@ -426,9 +420,11 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
       if (studentIdx === -1) continue;
 
       const student = updatedStudentsList[studentIdx];
-      const caScore = Math.min(40, (Number(row.ca1) || 0) + (Number(row.ca2) || 0) + (Number(row.midterm) || 0));
-      const examScore = Math.min(60, Number(row.exam) || 0);
-      const total = caScore + examScore;
+      const ca = Math.min(10, Math.max(0, Number(row.ca) || 0));
+      const midterm = Math.min(10, Math.max(0, Number(row.midterm) || 0));
+      const examScore = Math.min(80, Math.max(0, Number(row.exam) || 0));
+      const caScore = ca + midterm;
+      const total = ca + midterm + examScore;
 
       let grade = 'F9';
       let remark = 'FAIL';
@@ -479,9 +475,9 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
       const updatedSubObj = {
         id: subIdx !== -1 ? currentSubjects[subIdx].id : String(Date.now() + Math.random()),
         subject: scoreSubject,
-        ca1: row.ca1,
-        ca2: row.ca2,
-        midterm: row.midterm,
+        ca,
+        ca1: ca,
+        midterm,
         caScore,
         examScore,
         exam: examScore,
@@ -498,7 +494,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
 
       const overallTotal = currentSubjects.reduce((acc: number, sub: any) => acc + (Number(sub.total) || 0), 0);
       const overallAverage = currentSubjects.length > 0 ? Number((overallTotal / currentSubjects.length).toFixed(1)) : 0;
-      const gpa = Number((overallAverage / 25).toFixed(2));
+      const gpa = Number(((overallAverage / 120) * 4.0).toFixed(2));
 
       const updatedTermRecords = upsertTermRecord(
         existingTermRecords,
@@ -542,13 +538,14 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
   const [fetchedStudentSubjects, setFetchedStudentSubjects] = useState<Array<{
     id: string;
     subject: string;
-    ca1: number;
-    ca2: number;
+    ca: number;
     midterm: number;
     exam: number;
     total: number;
     grade: string;
     remark: string;
+    ca1?: number;
+    ca2?: number;
   }>>([]);
   const [newSubjectForFetched, setNewSubjectForFetched] = useState('');
 
@@ -649,19 +646,15 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
       }
 
       const normSubs = rawStudentSubjects.map(sub => {
-        let ca1 = sub.ca1 !== undefined ? Number(sub.ca1) : 0;
-        let ca2 = sub.ca2 !== undefined ? Number(sub.ca2) : 0;
-        let midterm = sub.midterm !== undefined ? Number(sub.midterm) : 0;
+        let ca = sub.ca !== undefined ? Number(sub.ca) : (sub.ca1 !== undefined ? Number(sub.ca1) : (sub.caScore !== undefined ? Math.min(10, Number(sub.caScore)) : 0));
+        let midterm = sub.midterm !== undefined ? Math.min(10, Number(sub.midterm)) : 0;
         let exam = sub.examScore !== undefined ? Number(sub.examScore) : (sub.exam !== undefined ? Number(sub.exam) : 0);
 
-        if (sub.caScore !== undefined && ca1 === 0 && ca2 === 0 && midterm === 0) {
-          const totalCa = Number(sub.caScore) || 0;
-          midterm = Math.min(20, Math.floor(totalCa * 0.5));
-          ca1 = Math.min(10, Math.floor((totalCa - midterm) / 2));
-          ca2 = Math.min(10, totalCa - midterm - ca1);
-        }
+        ca = Math.min(10, Math.max(0, ca));
+        midterm = Math.min(10, Math.max(0, midterm));
+        exam = Math.min(80, Math.max(0, exam));
 
-        const total = Math.min(100, ca1 + ca2 + midterm + exam);
+        const total = ca + midterm + exam;
         let grade = 'F9';
         let remark = 'FAIL';
         if (total >= 80) { grade = 'A1'; remark = 'EXCELLENT'; }
@@ -676,10 +669,10 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
         return {
           id: sub.id || String(Date.now() + Math.random()),
           subject: sub.subject || 'Subject',
-          ca1,
-          ca2,
+          ca,
+          ca1: ca,
           midterm,
-          caScore: ca1 + ca2 + midterm,
+          caScore: ca + midterm,
           examScore: exam,
           exam,
           total,
@@ -700,26 +693,24 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
   // Helper to update a subject score in fetched student
   const updateFetchedSubjectScore = (
     idx: number,
-    field: 'ca1' | 'ca2' | 'midterm' | 'exam',
+    field: 'ca' | 'midterm' | 'exam',
     val: number
   ) => {
     setFetchedStudentSubjects(prev => {
       const updated = [...prev];
       const item = { ...updated[idx] };
 
-      let ca1 = field === 'ca1' ? val : (item.ca1 || 0);
-      let ca2 = field === 'ca2' ? val : (item.ca2 || 0);
+      let ca = field === 'ca' ? val : (item.ca ?? item.ca1 ?? 0);
       let midterm = field === 'midterm' ? val : (item.midterm || 0);
       let exam = field === 'exam' ? val : (item.exam !== undefined ? item.exam : (item.examScore || 0));
 
-      ca1 = Math.min(10, Math.max(0, ca1));
-      ca2 = Math.min(10, Math.max(0, ca2));
-      midterm = Math.min(20, Math.max(0, midterm));
-      exam = Math.min(60, Math.max(0, exam));
+      ca = Math.min(10, Math.max(0, ca));
+      midterm = Math.min(10, Math.max(0, midterm));
+      exam = Math.min(80, Math.max(0, exam));
 
-      const caScore = ca1 + ca2 + midterm;
+      const caScore = ca + midterm;
       const examScore = exam;
-      const total = Math.min(100, caScore + examScore);
+      const total = ca + midterm + exam;
       let grade = 'F9';
       let remark = 'FAIL';
       if (total >= 80) { grade = 'A1'; remark = 'EXCELLENT'; }
@@ -733,8 +724,8 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
 
       updated[idx] = {
         ...item,
-        ca1,
-        ca2,
+        ca,
+        ca1: ca,
         midterm,
         caScore,
         examScore: exam,
@@ -752,11 +743,10 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
     if (!fetchedStudent) return;
 
     const updatedSubjects = fetchedStudentSubjects.map(sub => {
-      const ca1 = Math.min(10, Math.max(0, Number(sub.ca1) || 0));
-      const ca2 = Math.min(10, Math.max(0, Number(sub.ca2) || 0));
-      const midterm = Math.min(20, Math.max(0, Number(sub.midterm) || 0));
-      const exam = Math.min(60, Math.max(0, Number(sub.exam !== undefined ? sub.exam : sub.examScore) || 0));
-      const caScore = ca1 + ca2 + midterm;
+      const ca = Math.min(10, Math.max(0, Number(sub.ca ?? sub.ca1) || 0));
+      const midterm = Math.min(10, Math.max(0, Number(sub.midterm) || 0));
+      const exam = Math.min(80, Math.max(0, Number(sub.exam !== undefined ? sub.exam : sub.examScore) || 0));
+      const caScore = ca + midterm;
       const examScore = exam;
       const total = caScore + examScore;
 
@@ -774,8 +764,8 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
       return {
         id: sub.id,
         subject: sub.subject,
-        ca1,
-        ca2,
+        ca,
+        ca1: ca,
         midterm,
         caScore,
         examScore,
@@ -788,7 +778,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
 
     const overallTotal = updatedSubjects.reduce((acc, s) => acc + s.total, 0);
     const overallAverage = updatedSubjects.length > 0 ? Number((overallTotal / updatedSubjects.length).toFixed(1)) : 0;
-    const gpa = Number((overallAverage / 25).toFixed(2));
+    const gpa = Number(((overallAverage / 100) * 4.0).toFixed(2));
 
     const updatedTermRecords = upsertTermRecord(
       fetchedStudent.termRecords || [],
@@ -1262,9 +1252,9 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
     const defaultSubs = subjectList.map((sub, idx) => ({
       id: `sub-init-${idx + 1}`,
       subject: sub.name,
-      ca1: 0,
-      ca2: 0,
+      ca: 0,
       midterm: 0,
+      exam: 0,
       caScore: 0,
       examScore: 0,
       total: 0,
@@ -1379,9 +1369,9 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
     const defaultSubs = subjectList.map((sub, idx) => ({
       id: `sub-init-${idx + 1}`,
       subject: sub.name,
-      ca1: 0,
-      ca2: 0,
+      ca: 0,
       midterm: 0,
+      exam: 0,
       caScore: 0,
       examScore: 0,
       total: 0,
@@ -1550,7 +1540,58 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
     };
 
     await api.addSubject(created);
-    setSubjectList([...subjectList, created]);
+    const updatedSubjectList = [...subjectList, created];
+    setSubjectList(updatedSubjectList);
+
+    // Initialize newly created subject on student records
+    const updatedStudents = await Promise.all(students.map(async (st) => {
+      let changed = false;
+      const currentSubs = [...(st.subjects || [])];
+      if (!currentSubs.some(s => s.subject?.trim().toLowerCase() === created.name.trim().toLowerCase())) {
+        currentSubs.push({
+          id: `sub-${created.code}`,
+          subject: created.name,
+          ca: 0,
+          midterm: 0,
+          exam: 0,
+          caScore: 0,
+          examScore: 0,
+          total: 0,
+          grade: 'F9',
+          remark: 'UNPUBLISHED',
+        });
+        changed = true;
+      }
+      const updatedTermRecords = (st.termRecords || []).map(r => {
+        const rSubs = [...(r.subjects || [])];
+        if (!rSubs.some(s => s.subject?.trim().toLowerCase() === created.name.trim().toLowerCase())) {
+          rSubs.push({
+            id: `sub-${created.code}`,
+            subject: created.name,
+            ca: 0,
+            midterm: 0,
+            exam: 0,
+            caScore: 0,
+            examScore: 0,
+            total: 0,
+            grade: 'F9',
+            remark: 'UNPUBLISHED',
+          });
+          changed = true;
+          return { ...r, subjects: rSubs };
+        }
+        return r;
+      });
+
+      if (changed) {
+        const updatedSt = { ...st, subjects: currentSubs, termRecords: updatedTermRecords };
+        await api.updateStudent(st.studentId, updatedSt);
+        return updatedSt;
+      }
+      return st;
+    }));
+    setStudents(updatedStudents);
+
     setIsAddSubjectOpen(false);
     setNewSubject({ code: '', name: '', category: 'General Core', teacher: '' });
     triggerToast(`Subject "${created.name}" created and synced to database!`);
@@ -1587,9 +1628,9 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
           subjectsToUse = subjectList.map((s, idx) => ({
             id: `sub-${idx + 1}`,
             subject: s.name,
-            ca1: 0,
-            ca2: 0,
+            ca: 0,
             midterm: 0,
+            exam: 0,
             caScore: 0,
             examScore: 0,
             total: 0,
@@ -1607,7 +1648,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
 
       const calculatedTotal = subjectsToUse.reduce((acc: number, sub: any) => acc + (Number(sub.total) || 0), 0);
       const calculatedAvg = subjectsToUse.length > 0 ? Number((calculatedTotal / subjectsToUse.length).toFixed(1)) : (studentData.overallAverage || studentData.averageScore || 0);
-      const calculatedGpa = subjectsToUse.length > 0 ? Number((calculatedAvg / 25).toFixed(2)) : (studentData.gpa || 0);
+      const calculatedGpa = subjectsToUse.length > 0 ? Number(((calculatedAvg / 120) * 4.0).toFixed(2)) : (studentData.gpa || 0);
 
       const dynamicRank = calculateDynamicStudentPosition(studentData, students);
 
@@ -3282,7 +3323,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                   <span className="text-xs font-bold text-[#1E3A8A]">
                     Score Matrix: {scoreClass} • {scoreSubject} ({scoreTerm} — {scoreSession})
                   </span>
-                  <span className="text-[10px] text-slate-500 font-mono">Max Total = 100%</span>
+                  <span className="text-[10px] text-slate-500 font-mono">CA (10) + MIDTERM (10) + EXAM (80) = Total (100)</span>
                 </div>
 
                 {scoreEntries.length === 0 ? (
@@ -3313,78 +3354,76 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                         <thead>
                           <tr className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 uppercase text-[10px]">
                             <th className="p-3">Student Name & ID</th>
-                            <th className="p-3">CA 1 (10)</th>
-                            <th className="p-3">CA 2 (10)</th>
-                            <th className="p-3">Midterm (20)</th>
-                            <th className="p-3">Exam (60)</th>
-                            <th className="p-3">Total (100)</th>
-                            <th className="p-3">Grade</th>
+                            <th className="p-3 text-center">CA (10)</th>
+                            <th className="p-3 text-center">MIDTERM (10)</th>
+                            <th className="p-3 text-center">EXAM (80)</th>
+                            <th className="p-3 text-center">Total</th>
+                            <th className="p-3 text-center">Grade</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                           {scoreEntries.map((row, idx) => {
-                            const total = Math.min(100, (row.ca1 || 0) + (row.ca2 || 0) + (row.midterm || 0) + (row.exam || 0));
-                            const grade = total >= 80 ? 'A1' : total >= 70 ? 'B2' : total >= 65 ? 'B3' : total >= 60 ? 'C4' : total >= 50 ? 'C6' : total >= 40 ? 'E8' : 'F9';
+                            const total = (row.ca || 0) + (row.midterm || 0) + (row.exam || 0);
+                            const grade = total >= 80 ? 'A1' : total >= 70 ? 'B2' : total >= 65 ? 'B3' : total >= 60 ? 'C4' : total >= 55 ? 'C5' : total >= 50 ? 'C6' : total >= 45 ? 'D7' : total >= 40 ? 'E8' : 'F9';
                             return (
                               <tr key={row.id}>
                                 <td className="p-3">
                                   <p className="font-bold text-[#0F172A]">{row.name}</p>
                                   <p className="font-mono text-[10px] text-[#1E3A8A] font-semibold">{row.id}</p>
                                 </td>
-                                <td className="p-3">
+                                <td className="p-3 text-center">
                                   <input
                                     type="number"
                                     min="0"
                                     max="10"
-                                    value={row.ca1 ?? 0}
+                                    value={row.ca ?? 0}
                                     onChange={(e) => {
-                                      const val = Math.min(10, Math.max(0, Number(e.target.value) || 0));
-                                      setScoreEntries(scoreEntries.map((item, i) => i === idx ? { ...item, ca1: val } : item));
+                                      const inputVal = Number(e.target.value) || 0;
+                                      if (inputVal > 10) {
+                                        triggerToast(`CA score cannot exceed 10 for ${row.name}`);
+                                      }
+                                      const val = Math.min(10, Math.max(0, inputVal));
+                                      setScoreEntries(scoreEntries.map((item, i) => i === idx ? { ...item, ca: val } : item));
                                     }}
                                     className="w-16 p-1.5 bg-slate-50 border border-slate-200 rounded-lg text-center font-bold text-[#0F172A]"
                                   />
                                 </td>
-                                <td className="p-3">
+                                <td className="p-3 text-center">
                                   <input
                                     type="number"
                                     min="0"
                                     max="10"
-                                    value={row.ca2 ?? 0}
-                                    onChange={(e) => {
-                                      const val = Math.min(10, Math.max(0, Number(e.target.value) || 0));
-                                      setScoreEntries(scoreEntries.map((item, i) => i === idx ? { ...item, ca2: val } : item));
-                                    }}
-                                    className="w-16 p-1.5 bg-slate-50 border border-slate-200 rounded-lg text-center font-bold text-[#0F172A]"
-                                  />
-                                </td>
-                                <td className="p-3">
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    max="20"
                                     value={row.midterm ?? 0}
                                     onChange={(e) => {
-                                      const val = Math.min(20, Math.max(0, Number(e.target.value) || 0));
+                                      const inputVal = Number(e.target.value) || 0;
+                                      if (inputVal > 10) {
+                                        triggerToast(`Midterm score cannot exceed 10 for ${row.name}`);
+                                      }
+                                      const val = Math.min(10, Math.max(0, inputVal));
                                       setScoreEntries(scoreEntries.map((item, i) => i === idx ? { ...item, midterm: val } : item));
                                     }}
                                     className="w-16 p-1.5 bg-slate-50 border border-slate-200 rounded-lg text-center font-bold text-[#0F172A]"
                                   />
                                 </td>
-                                <td className="p-3">
+                                <td className="p-3 text-center">
                                   <input
                                     type="number"
                                     min="0"
-                                    max="60"
+                                    max="80"
                                     value={row.exam ?? 0}
                                     onChange={(e) => {
-                                      const val = Math.min(60, Math.max(0, Number(e.target.value) || 0));
+                                      const inputVal = Number(e.target.value) || 0;
+                                      if (inputVal > 80) {
+                                        triggerToast(`Exam score cannot exceed 80 for ${row.name}`);
+                                      }
+                                      const val = Math.min(80, Math.max(0, inputVal));
                                       setScoreEntries(scoreEntries.map((item, i) => i === idx ? { ...item, exam: val } : item));
                                     }}
                                     className="w-16 p-1.5 bg-slate-50 border border-slate-200 rounded-lg text-center font-bold text-[#0F172A]"
                                   />
                                 </td>
-                                <td className="p-3 font-bold font-mono text-[#1E3A8A] text-sm">{total}%</td>
-                                <td className="p-3">
+                                <td className="p-3 text-center font-bold font-mono text-[#1E3A8A] text-sm">{total}</td>
+                                <td className="p-3 text-center">
                                   <span className={`px-2 py-0.5 rounded font-extrabold text-xs ${
                                     grade === 'F9' || grade.startsWith('F') ? 'bg-red-100 text-red-700 border border-red-300 font-black' :
                                     grade.startsWith('A') ? 'bg-emerald-100 text-emerald-800' :

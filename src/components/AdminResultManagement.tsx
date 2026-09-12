@@ -78,6 +78,7 @@ const cleanClass = (c: string) => (c || '').toLowerCase().replace(/\s/g, '');
 
 // Standard grading calculation
 const calculateGradeRemark = (total: number): { grade: string; remark: string } => {
+  // Assessment breakdown: CA (10) + MIDTERM (10) + EXAM (80) = 100 Max
   if (total >= 80) return { grade: 'A1', remark: 'EXCELLENT' };
   if (total >= 70) return { grade: 'B2', remark: 'VERY GOOD' };
   if (total >= 65) return { grade: 'B3', remark: 'GOOD' };
@@ -145,13 +146,14 @@ export const AdminResultManagement: React.FC<AdminResultManagementProps> = ({
   const [activeSubjects, setActiveSubjects] = useState<Array<{
     id: string;
     subject: string;
-    ca1: number;
-    ca2: number;
+    ca: number;
     midterm: number;
     exam: number;
     total: number;
     grade: string;
     remark: string;
+    ca1?: number;
+    ca2?: number;
   }>>([]);
 
   const [newSubjectSelection, setNewSubjectSelection] = useState('');
@@ -448,37 +450,33 @@ export const AdminResultManagement: React.FC<AdminResultManagementProps> = ({
     let initialSubjectRows: Array<{
       id: string;
       subject: string;
-      ca1: number;
-      ca2: number;
+      ca: number;
       midterm: number;
       exam: number;
       total: number;
       grade: string;
       remark: string;
+      ca1?: number;
+      ca2?: number;
     }> = [];
 
     if (existingRecord && existingRecord.subjects && existingRecord.subjects.length > 0) {
       initialSubjectRows = existingRecord.subjects.map(s => {
-        let ca1 = s.ca1 !== undefined ? Number(s.ca1) : 0;
-        let ca2 = s.ca2 !== undefined ? Number(s.ca2) : 0;
-        let midterm = s.midterm !== undefined ? Number(s.midterm) : 0;
-        let exam = s.examScore !== undefined ? Number(s.examScore) : (s.exam !== undefined ? Number(s.exam) : 0);
+        let ca = s.ca !== undefined ? Number(s.ca) : (s.ca1 !== undefined ? Number(s.ca1) : (s.caScore !== undefined ? Math.min(10, Number(s.caScore)) : 0));
+        let midterm = s.midterm !== undefined ? Math.min(10, Number(s.midterm)) : 0;
+        let exam = s.exam !== undefined ? Math.min(80, Number(s.exam)) : (s.examScore !== undefined ? Math.min(80, Number(s.examScore)) : 0);
 
-        if (s.caScore !== undefined && ca1 === 0 && ca2 === 0 && midterm === 0) {
-          const totalCa = Number(s.caScore) || 0;
-          midterm = Math.min(20, Math.floor(totalCa * 0.5));
-          ca1 = Math.min(10, Math.floor((totalCa - midterm) / 2));
-          ca2 = Math.min(10, totalCa - midterm - ca1);
-        }
+        ca = Math.min(10, Math.max(0, ca));
+        midterm = Math.min(10, Math.max(0, midterm));
+        exam = Math.min(80, Math.max(0, exam));
 
-        const total = Math.min(100, ca1 + ca2 + midterm + exam);
+        const total = ca + midterm + exam;
         const { grade, remark } = calculateGradeRemark(total);
 
         return {
           id: s.id || String(Date.now() + Math.random()),
           subject: s.subject || 'Subject',
-          ca1,
-          ca2,
+          ca,
           midterm,
           exam,
           total,
@@ -490,8 +488,7 @@ export const AdminResultManagement: React.FC<AdminResultManagementProps> = ({
       initialSubjectRows = defaultSubjectNames.map((name, i) => ({
         id: `new_sub_${Date.now()}_${i}`,
         subject: name,
-        ca1: 0,
-        ca2: 0,
+        ca: 0,
         midterm: 0,
         exam: 0,
         total: 0,
@@ -516,30 +513,27 @@ export const AdminResultManagement: React.FC<AdminResultManagementProps> = ({
   // Update a single subject score field
   const handleUpdateSubjectField = (
     index: number,
-    field: 'ca1' | 'ca2' | 'midterm' | 'exam',
+    field: 'ca' | 'midterm' | 'exam',
     value: number
   ) => {
     setActiveSubjects(prev => {
       const updated = [...prev];
       const item = { ...updated[index] };
 
-      let ca1 = field === 'ca1' ? value : item.ca1;
-      let ca2 = field === 'ca2' ? value : item.ca2;
+      let ca = field === 'ca' ? value : item.ca;
       let midterm = field === 'midterm' ? value : item.midterm;
       let exam = field === 'exam' ? value : item.exam;
 
-      ca1 = Math.min(10, Math.max(0, Number(ca1) || 0));
-      ca2 = Math.min(10, Math.max(0, Number(ca2) || 0));
-      midterm = Math.min(20, Math.max(0, Number(midterm) || 0));
-      exam = Math.min(60, Math.max(0, Number(exam) || 0));
+      ca = Math.min(10, Math.max(0, Number(ca) || 0));
+      midterm = Math.min(10, Math.max(0, Number(midterm) || 0));
+      exam = Math.min(80, Math.max(0, Number(exam) || 0));
 
-      const total = Math.min(100, ca1 + ca2 + midterm + exam);
+      const total = ca + midterm + exam;
       const { grade, remark } = calculateGradeRemark(total);
 
       updated[index] = {
         ...item,
-        ca1,
-        ca2,
+        ca,
         midterm,
         exam,
         total,
@@ -565,8 +559,7 @@ export const AdminResultManagement: React.FC<AdminResultManagementProps> = ({
       {
         id: `sub_added_${Date.now()}`,
         subject: subName,
-        ca1: 0,
-        ca2: 0,
+        ca: 0,
         midterm: 0,
         exam: 0,
         total: 0,
@@ -595,14 +588,13 @@ export const AdminResultManagement: React.FC<AdminResultManagementProps> = ({
     }
 
     const invalidSubject = activeSubjects.find(s =>
-      s.ca1 < 0 || s.ca1 > 10 || isNaN(s.ca1) ||
-      s.ca2 < 0 || s.ca2 > 10 || isNaN(s.ca2) ||
-      s.midterm < 0 || s.midterm > 20 || isNaN(s.midterm) ||
-      s.exam < 0 || s.exam > 60 || isNaN(s.exam)
+      s.ca < 0 || s.ca > 10 || isNaN(s.ca) ||
+      s.midterm < 0 || s.midterm > 10 || isNaN(s.midterm) ||
+      s.exam < 0 || s.exam > 80 || isNaN(s.exam)
     );
 
     if (invalidSubject) {
-      const err = `Invalid score entered for "${invalidSubject.subject}". Assessment limits: CA 1 (0-10), CA 2 (0-10), Midterm (0-20), Exam (0-60).`;
+      const err = `Invalid score entered for "${invalidSubject.subject}". Assessment limits: CA cannot exceed 10 (0-10), MIDTERM cannot exceed 10 (0-10), EXAM cannot exceed 80 (0-80).`;
       setScoreError(err);
       onTriggerToast(err);
       return;
@@ -615,10 +607,10 @@ export const AdminResultManagement: React.FC<AdminResultManagementProps> = ({
       const finalSubjects: SubjectGrade[] = activeSubjects.map(s => ({
         id: s.id,
         subject: s.subject,
-        ca1: s.ca1,
-        ca2: s.ca2,
+        ca: s.ca,
+        ca1: s.ca,
         midterm: s.midterm,
-        caScore: s.ca1 + s.ca2 + s.midterm,
+        caScore: s.ca + s.midterm,
         examScore: s.exam,
         exam: s.exam,
         total: s.total,
@@ -628,7 +620,7 @@ export const AdminResultManagement: React.FC<AdminResultManagementProps> = ({
 
       const overallTotal = finalSubjects.reduce((acc, s) => acc + s.total, 0);
       const overallAverage = finalSubjects.length > 0 ? Number((overallTotal / finalSubjects.length).toFixed(1)) : 0;
-      const gpa = Number((overallAverage / 25).toFixed(2));
+      const gpa = Number(((overallAverage / 100) * 4.0).toFixed(2));
 
       // Build updated StudentTermRecord
       const newTermRecord: StudentTermRecord = {
@@ -897,7 +889,7 @@ export const AdminResultManagement: React.FC<AdminResultManagementProps> = ({
   const entryTotals = useMemo(() => {
     const total = activeSubjects.reduce((acc, s) => acc + s.total, 0);
     const avg = activeSubjects.length > 0 ? Number((total / activeSubjects.length).toFixed(1)) : 0;
-    const gpa = Number((avg / 25).toFixed(2));
+    const gpa = Number(((avg / 120) * 4.0).toFixed(2));
     return { total, avg, gpa, count: activeSubjects.length };
   }, [activeSubjects]);
 
@@ -1259,11 +1251,11 @@ export const AdminResultManagement: React.FC<AdminResultManagementProps> = ({
             </div>
             <div>
               <span className="text-[10px] font-bold uppercase text-slate-500 block">Cumulative Score</span>
-              <span className="text-base font-black font-mono text-[#1E3A8A]">{entryTotals.total} / {entryTotals.count * 100}</span>
+              <span className="text-base font-black font-mono text-[#1E3A8A]">{entryTotals.total} / {entryTotals.count * 120}</span>
             </div>
             <div>
               <span className="text-[10px] font-bold uppercase text-slate-500 block">Average Score</span>
-              <span className="text-base font-black font-mono text-emerald-700">{entryTotals.avg}%</span>
+              <span className="text-base font-black font-mono text-emerald-700">{entryTotals.avg}</span>
             </div>
             <div>
               <span className="text-[10px] font-bold uppercase text-slate-500 block">Calculated GPA</span>
@@ -1279,7 +1271,7 @@ export const AdminResultManagement: React.FC<AdminResultManagementProps> = ({
                 <span>Subject Score Breakdown Matrix</span>
               </h4>
               <span className="text-[11px] text-slate-500 font-mono">
-                CA 1 (10) + CA 2 (10) + Midterm (20) + Exam (60) = 100%
+                CA (10) + MIDTERM (10) + EXAM (80) = Total (100)
               </span>
             </div>
 
@@ -1289,11 +1281,10 @@ export const AdminResultManagement: React.FC<AdminResultManagementProps> = ({
                   <thead>
                     <tr className="bg-slate-50 text-slate-500 font-black border-b border-slate-200 uppercase text-[10px] tracking-wider">
                       <th className="p-3">Subject Name</th>
-                      <th className="p-3 text-center">CA 1 (10)</th>
-                      <th className="p-3 text-center">CA 2 (10)</th>
-                      <th className="p-3 text-center">Midterm (20)</th>
-                      <th className="p-3 text-center">Exam (60)</th>
-                      <th className="p-3 text-center">Total (100)</th>
+                      <th className="p-3 text-center">CA (10)</th>
+                      <th className="p-3 text-center">MIDTERM (10)</th>
+                      <th className="p-3 text-center">EXAM (80)</th>
+                      <th className="p-3 text-center">Total</th>
                       <th className="p-3 text-center">Grade</th>
                       <th className="p-3 text-center">Remark</th>
                       <th className="p-3 text-right">Action</th>
@@ -1302,7 +1293,7 @@ export const AdminResultManagement: React.FC<AdminResultManagementProps> = ({
                   <tbody className="divide-y divide-slate-100 font-medium text-slate-700 bg-white">
                     {activeSubjects.length === 0 ? (
                       <tr>
-                        <td colSpan={9} className="p-6 text-center text-xs text-slate-500">
+                        <td colSpan={8} className="p-6 text-center text-xs text-slate-500">
                           No subjects added to this terminal record yet. Use the control below to add subjects.
                         </td>
                       </tr>
@@ -1320,8 +1311,15 @@ export const AdminResultManagement: React.FC<AdminResultManagementProps> = ({
                               type="number"
                               min="0"
                               max="10"
-                              value={row.ca1}
-                              onChange={(e) => handleUpdateSubjectField(idx, 'ca1', Number(e.target.value) || 0)}
+                              value={row.ca}
+                              onChange={(e) => {
+                                const inputVal = Number(e.target.value) || 0;
+                                if (inputVal > 10) {
+                                  onTriggerToast(`CA score cannot exceed 10 for ${row.subject}`);
+                                }
+                                const val = Math.min(10, Math.max(0, inputVal));
+                                handleUpdateSubjectField(idx, 'ca', val);
+                              }}
                               className="w-16 p-1.5 bg-slate-50 border border-slate-200 rounded-lg text-center font-bold text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
                             />
                           </td>
@@ -1330,18 +1328,15 @@ export const AdminResultManagement: React.FC<AdminResultManagementProps> = ({
                               type="number"
                               min="0"
                               max="10"
-                              value={row.ca2}
-                              onChange={(e) => handleUpdateSubjectField(idx, 'ca2', Number(e.target.value) || 0)}
-                              className="w-16 p-1.5 bg-slate-50 border border-slate-200 rounded-lg text-center font-bold text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
-                            />
-                          </td>
-                          <td className="p-3 text-center">
-                            <input
-                              type="number"
-                              min="0"
-                              max="20"
                               value={row.midterm}
-                              onChange={(e) => handleUpdateSubjectField(idx, 'midterm', Number(e.target.value) || 0)}
+                              onChange={(e) => {
+                                const inputVal = Number(e.target.value) || 0;
+                                if (inputVal > 10) {
+                                  onTriggerToast(`Midterm score cannot exceed 10 for ${row.subject}`);
+                                }
+                                const val = Math.min(10, Math.max(0, inputVal));
+                                handleUpdateSubjectField(idx, 'midterm', val);
+                              }}
                               className="w-16 p-1.5 bg-slate-50 border border-slate-200 rounded-lg text-center font-bold text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
                             />
                           </td>
@@ -1349,14 +1344,21 @@ export const AdminResultManagement: React.FC<AdminResultManagementProps> = ({
                             <input
                               type="number"
                               min="0"
-                              max="60"
+                              max="80"
                               value={row.exam}
-                              onChange={(e) => handleUpdateSubjectField(idx, 'exam', Number(e.target.value) || 0)}
+                              onChange={(e) => {
+                                const inputVal = Number(e.target.value) || 0;
+                                if (inputVal > 80) {
+                                  onTriggerToast(`Exam score cannot exceed 80 for ${row.subject}`);
+                                }
+                                const val = Math.min(80, Math.max(0, inputVal));
+                                handleUpdateSubjectField(idx, 'exam', val);
+                              }}
                               className="w-16 p-1.5 bg-slate-50 border border-slate-200 rounded-lg text-center font-bold text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
                             />
                           </td>
                           <td className="p-3 text-center font-bold font-mono text-[#1E3A8A] text-sm">
-                            {row.total}%
+                            {row.total}
                           </td>
                           <td className="p-3 text-center">
                             <span className={`px-2 py-0.5 rounded font-extrabold text-xs inline-block ${
@@ -1371,7 +1373,7 @@ export const AdminResultManagement: React.FC<AdminResultManagementProps> = ({
                           </td>
                           <td className="p-3 text-center">
                             <span className={`px-2 py-0.5 rounded font-bold text-[10px] uppercase tracking-wider inline-block ${
-                              row.remark === 'FAIL' || row.total < 40 ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              row.remark === 'FAIL' || row.total < 48 ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                             }`}>
                               {row.remark}
                             </span>
@@ -1469,8 +1471,12 @@ export const AdminResultManagement: React.FC<AdminResultManagementProps> = ({
                 const tempSubs = activeSubjects.map(s => ({
                   id: s.id,
                   subject: s.subject,
-                  caScore: s.ca1 + s.ca2 + s.midterm,
+                  ca: s.ca,
+                  ca1: s.ca,
+                  midterm: s.midterm,
+                  caScore: s.ca + s.midterm,
                   examScore: s.exam,
+                  exam: s.exam,
                   total: s.total,
                   grade: s.grade as any,
                   remark: s.remark as any,

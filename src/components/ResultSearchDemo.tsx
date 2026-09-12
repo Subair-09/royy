@@ -559,11 +559,11 @@ export const ResultSearchDemo: React.FC<ResultSearchDemoProps> = ({
                             <div>
                               <span className="text-xs font-bold text-slate-900 block">{sub.subject}</span>
                               <span className="text-[10px] text-slate-500 font-mono">
-                                CA: {sub.caScore ?? 0} | Exam: {sub.examScore ?? 0}
+                                CA: {sub.ca ?? sub.caScore ?? 0} | Mid: {sub.midterm ?? 0} | Exam: {sub.exam ?? sub.examScore ?? 0}
                               </span>
                             </div>
                             <div className="text-right">
-                              <span className="text-xs font-mono font-bold text-[#1E3A8A] block">{sub.total ?? 0}/100</span>
+                              <span className="text-xs font-mono font-bold text-[#1E3A8A] block">{sub.total ?? 0}</span>
                               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md border ${
                                 sub.grade === 'F9' || sub.grade?.startsWith('F')
                                   ? 'text-red-700 bg-red-100 border-red-300 font-extrabold'

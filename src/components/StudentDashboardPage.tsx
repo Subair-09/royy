@@ -873,18 +873,20 @@ export const StudentDashboardPage: React.FC<StudentDashboardPageProps> = ({
                       <thead>
                         <tr className="bg-slate-100/80 border-b border-slate-200 text-[11px] font-black uppercase text-slate-600 tracking-wider">
                           <th className="py-3 px-4">Subject</th>
-                          <th className="py-3 px-3 text-center">CA (40%)</th>
-                          <th className="py-3 px-3 text-center">Exam (60%)</th>
-                          <th className="py-3 px-3 text-center">Total (100%)</th>
+                          <th className="py-3 px-3 text-center">CA (10)</th>
+                          <th className="py-3 px-3 text-center">Midterm (10)</th>
+                          <th className="py-3 px-3 text-center">Exam (80)</th>
+                          <th className="py-3 px-3 text-center">Total</th>
                           <th className="py-3 px-3 text-center">Grade</th>
                           <th className="py-3 px-4">Remark</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 text-xs">
                         {activeStudentSubjects.map((sub: any, i: number) => {
-                          const ca = Number(sub.caScore ?? ((sub.ca1 || 0) + (sub.ca2 || 0) + (sub.midterm || 0)));
+                          const ca = sub.ca !== undefined ? Number(sub.ca) : (sub.ca1 !== undefined ? Number(sub.ca1) : (sub.caScore !== undefined ? Math.min(10, Number(sub.caScore)) : 0));
+                          const midterm = sub.midterm !== undefined ? Math.min(10, Number(sub.midterm)) : 0;
                           const exam = Number(sub.examScore ?? sub.exam ?? 0);
-                          const total = Number(sub.total ?? (ca + exam));
+                          const total = Number(sub.total ?? (ca + midterm + exam));
                           const grade = sub.grade || (total >= 80 ? 'A1' : total >= 70 ? 'B2' : total >= 65 ? 'B3' : total >= 60 ? 'C4' : total >= 55 ? 'C5' : total >= 50 ? 'C6' : total >= 45 ? 'D7' : total >= 40 ? 'E8' : 'F9');
                           const remark = sub.remark || (grade.startsWith('A') ? 'EXCELLENT' : grade.startsWith('B') ? 'VERY GOOD' : grade.startsWith('C') ? 'CREDIT' : grade === 'F9' ? 'FAIL' : 'PASS');
 
@@ -892,6 +894,7 @@ export const StudentDashboardPage: React.FC<StudentDashboardPageProps> = ({
                             <tr key={sub.id || i} className="hover:bg-slate-50/80">
                               <td className="py-3 px-4 font-bold text-slate-900">{sub.subject}</td>
                               <td className="py-3 px-3 text-center font-mono font-bold text-slate-700">{ca}</td>
+                              <td className="py-3 px-3 text-center font-mono font-bold text-slate-700">{midterm}</td>
                               <td className="py-3 px-3 text-center font-mono font-bold text-slate-700">{exam}</td>
                               <td className="py-3 px-3 text-center font-mono font-black text-slate-900 text-sm">{total}</td>
                               <td className="py-3 px-3 text-center">
