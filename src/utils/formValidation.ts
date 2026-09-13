@@ -261,6 +261,7 @@ export function validateNumbersOnly(
 
 /**
  * Validates a Student Registration ID.
+ * Supports alphanumeric values and special delimiters like '/' (e.g. J/1233567H, JSS/2026/001, 2026101).
  */
 export function validateStudentId(studentId: string, required = true): ValidationResult {
   const trimmed = (studentId || '').trim();
@@ -270,22 +271,22 @@ export function validateStudentId(studentId: string, required = true): Validatio
       error: required ? 'Registration ID is required.' : undefined,
     };
   }
-  if (/[a-zA-Z]/.test(trimmed)) {
+  if (trimmed.length < 2 || trimmed.length > 30) {
     return {
       isValid: false,
-      error: 'Registration ID cannot contain alphabet letters. Numbers only.',
+      error: 'Registration ID must be between 2 and 30 characters (e.g. J/1233567H).',
     };
   }
-  if (!/^\d+$/.test(trimmed)) {
+  if (!/^[a-zA-Z0-9/_\-.]+$/.test(trimmed)) {
     return {
       isValid: false,
-      error: 'Registration ID must contain numbers only.',
+      error: 'Registration ID can only contain letters, numbers, and characters like / - _ .',
     };
   }
-  if (trimmed.length < 4 || trimmed.length > 15) {
+  if (!/[a-zA-Z0-9]/.test(trimmed)) {
     return {
       isValid: false,
-      error: 'Registration ID must be between 4 and 15 digits.',
+      error: 'Registration ID must contain at least one letter or number.',
     };
   }
   return { isValid: true };

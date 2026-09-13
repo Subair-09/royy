@@ -64,8 +64,8 @@ export const ContactModal: React.FC<ContactModalProps> = ({ isOpen, onClose }) =
       // Disallow numbers in name field
       sanitizedValue = rawValue.replace(/[0-9]/g, '');
     } else if (field === 'studentId') {
-      // Disallow letters in student ID (numbers only)
-      sanitizedValue = rawValue.replace(/\D/g, '').slice(0, 12);
+      // Allow alphanumeric and delimiters like / - _ .
+      sanitizedValue = rawValue.replace(/[^a-zA-Z0-9/_\-.]/g, '').slice(0, 30);
     } else if (field === 'phone') {
       // Numbers only, exactly max 11 digits
       sanitizedValue = rawValue.replace(/\D/g, '').slice(0, 11);
@@ -222,11 +222,11 @@ export const ContactModal: React.FC<ContactModalProps> = ({ isOpen, onClose }) =
                 </div>
                 <input
                   type="text"
-                  maxLength={12}
+                  maxLength={30}
                   value={formData.studentId}
                   onChange={(e) => handleChange('studentId', e.target.value)}
                   onBlur={() => handleBlur('studentId')}
-                  placeholder="e.g. 2025104 (numbers only)"
+                  placeholder="e.g. J/1233567H or 2025104"
                   className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs font-mono font-bold focus:outline-none transition-all ${
                     touched.studentId && formErrors.studentId
                       ? 'border-red-400 bg-red-50/50 focus:ring-2 focus:ring-red-500/20'

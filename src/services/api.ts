@@ -55,7 +55,8 @@ export const api = {
 
   async getStudentById(id: string): Promise<StudentResult | null> {
     try {
-      const res = await fetch(`/api/students/${encodeURIComponent(id)}`);
+      const enc = encodeURIComponent(id);
+      const res = await fetch(`/api/students/${enc}?regId=${enc}`);
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -81,7 +82,8 @@ export const api = {
 
   async updateStudent(id: string, updateData: any): Promise<boolean> {
     try {
-      const res = await fetch(`/api/students/${encodeURIComponent(id)}`, {
+      const enc = encodeURIComponent(id);
+      const res = await fetch(`/api/students/${enc}?regId=${enc}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updateData),
@@ -97,7 +99,8 @@ export const api = {
 
   async deleteStudent(id: string): Promise<boolean> {
     try {
-      const res = await fetch(`/api/students/${encodeURIComponent(id)}`, {
+      const enc = encodeURIComponent(id);
+      const res = await fetch(`/api/students/${enc}?regId=${enc}`, {
         method: 'DELETE',
       });
       if (res.ok && typeof window !== 'undefined') {

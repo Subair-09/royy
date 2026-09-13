@@ -309,6 +309,10 @@ export function getDbStatus() {
   };
 }
 
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 // Data Access Methods
 export async function getAllStudents() {
   if (isMongoConnected && dbInstance) {
@@ -319,9 +323,10 @@ export async function getAllStudents() {
 
 export async function getStudentById(studentId: string) {
   const cleanId = String(studentId || '').trim();
+  if (!cleanId) return null;
   if (isMongoConnected && dbInstance) {
     return await dbInstance.collection('students').findOne(
-      { studentId: { $regex: new RegExp(`^${cleanId}$`, 'i') } },
+      { studentId: { $regex: new RegExp(`^${escapeRegex(cleanId)}$`, 'i') } },
       { projection: { _id: 0 } }
     );
   }
@@ -333,7 +338,7 @@ export async function createStudent(studentData: any) {
   const normalizedData = { ...studentData, studentId: cleanId };
   if (isMongoConnected && dbInstance) {
     await dbInstance.collection('students').updateOne(
-      { studentId: cleanId },
+      { studentId: { $regex: new RegExp(`^${escapeRegex(cleanId)}$`, 'i') } },
       { $set: normalizedData },
       { upsert: true }
     );
@@ -349,9 +354,10 @@ export async function createStudent(studentData: any) {
 
 export async function updateStudent(studentId: string, updateData: any) {
   const cleanId = String(studentId || '').trim();
+  if (!cleanId) return null;
   if (isMongoConnected && dbInstance) {
     await dbInstance.collection('students').updateOne(
-      { studentId: { $regex: new RegExp(`^${cleanId}$`, 'i') } },
+      { studentId: { $regex: new RegExp(`^${escapeRegex(cleanId)}$`, 'i') } },
       { $set: updateData }
     );
   }
@@ -365,8 +371,9 @@ export async function updateStudent(studentId: string, updateData: any) {
 
 export async function deleteStudent(studentId: string) {
   const cleanId = String(studentId || '').trim();
+  if (!cleanId) return false;
   if (isMongoConnected && dbInstance) {
-    await dbInstance.collection('students').deleteOne({ studentId: { $regex: new RegExp(`^${cleanId}$`, 'i') } });
+    await dbInstance.collection('students').deleteOne({ studentId: { $regex: new RegExp(`^${escapeRegex(cleanId)}$`, 'i') } });
   }
   memoryStore.students = memoryStore.students.filter(s => String(s.studentId || '').trim().toUpperCase() !== cleanId.toUpperCase());
   return true;

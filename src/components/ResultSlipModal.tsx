@@ -513,7 +513,7 @@ export const ResultSlipModal: React.FC<ResultSlipModalProps> = ({
                   <th className="border border-black text-center align-middle" style={{ width: '35px', padding: '6px 4px', lineHeight: 'normal', verticalAlign: 'middle' }}>S/N</th>
                   <th className="border border-black text-left align-middle" style={{ padding: '6px 8px', lineHeight: 'normal', verticalAlign: 'middle' }}>SUBJECT</th>
                   <th className="border border-black text-center align-middle" style={{ width: '130px', padding: '6px 4px', lineHeight: 'normal', verticalAlign: 'middle' }}>1ST SUMMARY (20)</th>
-                  <th className="border border-black text-center align-middle" style={{ width: '140px', padding: '6px 4px', lineHeight: 'normal', verticalAlign: 'middle' }}>1ST SUMMARY (100%)</th>
+                  <th className="border border-black text-center align-middle" style={{ width: '140px', padding: '6px 4px', lineHeight: 'normal', verticalAlign: 'middle' }}>1ST SUMMARY (80)</th>
                   <th className="border border-black text-center align-middle" style={{ width: '80px', padding: '6px 4px', lineHeight: 'normal', verticalAlign: 'middle' }}>STATUS</th>
                 </tr>
               </thead>
@@ -529,7 +529,7 @@ export const ResultSlipModal: React.FC<ResultSlipModalProps> = ({
                         <td className="border border-black text-center font-mono align-middle" style={{ padding: '6px 4px', lineHeight: 'normal', verticalAlign: 'middle' }}>{idx + 1}</td>
                         <td className="border border-black text-left uppercase align-middle" style={{ padding: '6px 8px', lineHeight: 'normal', verticalAlign: 'middle' }}>{sub.subject}</td>
                         <td className="border border-black text-center font-mono font-bold align-middle" style={{ padding: '6px 4px', lineHeight: 'normal', verticalAlign: 'middle' }}>{rawCa}</td>
-                        <td className="border border-black text-center font-mono font-black align-middle" style={{ padding: '6px 4px', lineHeight: 'normal', verticalAlign: 'middle' }}>{totalScore}%</td>
+                        <td className="border border-black text-center font-mono font-black align-middle" style={{ padding: '6px 4px', lineHeight: 'normal', verticalAlign: 'middle' }}>{totalScore}</td>
                         <td className={`border border-black text-center font-extrabold align-middle ${!isGS ? 'text-red-600 font-extrabold' : 'text-emerald-800'}`} style={{ padding: '6px 4px', lineHeight: 'normal', verticalAlign: 'middle' }}>
                           {isGS ? 'GS' : 'NGS'}
                         </td>

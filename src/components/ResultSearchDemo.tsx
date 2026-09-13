@@ -231,8 +231,8 @@ export const ResultSearchDemo: React.FC<ResultSearchDemoProps> = ({
       return;
     }
 
-    if (cleaned.length < 4) {
-      setInputError('Registration ID must be at least 4 digits (e.g. 2025104).');
+    if (cleaned.length < 2) {
+      setInputError('Registration ID must be at least 2 characters (e.g. J/1233567H or 2025104).');
       return;
     }
 
@@ -344,22 +344,22 @@ export const ResultSearchDemo: React.FC<ResultSearchDemoProps> = ({
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                      7-Digit Registration ID (Primary Key) *
+                      Student Registration ID (Primary Key) *
                     </label>
                     <span className="text-[10px] font-mono font-bold text-[#1E3A8A] bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
-                      7 Digits Required
+                      Alphanumeric & Symbols Supported
                     </span>
                   </div>
                   <div className="relative">
                     <input
                       type="text"
-                      maxLength={12}
+                      maxLength={30}
                       value={studentIdInput}
                       onChange={(e) => {
-                        setStudentIdInput(e.target.value.replace(/\D/g, ''));
+                        setStudentIdInput(e.target.value.replace(/[^a-zA-Z0-9/_\-.]/g, ''));
                         if (inputError) setInputError(null);
                       }}
-                      placeholder="e.g. 2025104"
+                      placeholder="e.g. J/1233567H or 2025104"
                       className={`w-full px-4 py-3 bg-slate-50 border rounded-2xl text-sm font-mono font-bold text-[#0F172A] focus:outline-none transition-all shadow-xs ${
                         inputError
                           ? 'border-red-400 bg-red-50/40 focus:ring-2 focus:ring-red-500/20'

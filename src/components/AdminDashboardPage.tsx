@@ -1838,28 +1838,33 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
     }
   }, [activeTab, adminUser]);
 
-  const generateUnique7DigitRegId = () => {
+  const generateUniqueAlphanumericRegId = (targetClass?: string) => {
+    const isSSS = (targetClass || '').toUpperCase().includes('SSS') || (targetClass || '').toUpperCase().includes('SS');
+    const prefix = isSSS ? 'S' : 'J';
     let candidate = '';
     let attempts = 0;
     while (attempts < 200) {
       const rand = Math.floor(1000000 + Math.random() * 9000000);
-      candidate = String(rand);
-      if (!students.some(s => String(s.studentId || '').trim() === candidate)) {
+      const suffix = String.fromCharCode(65 + Math.floor(Math.random() * 26)); // A-Z
+      candidate = `${prefix}/${rand}${suffix}`;
+      if (!students.some(s => String(s.studentId || '').trim().toUpperCase() === candidate.toUpperCase())) {
         return candidate;
       }
       attempts++;
     }
-    return String(Math.floor(2026000 + Math.random() * 9000));
+    return `${prefix}/${Math.floor(1000000 + Math.random() * 9000000)}H`;
   };
+  const generateUnique7DigitRegId = generateUniqueAlphanumericRegId;
 
   const handleOpenAddStudentModal = () => {
-    const autoId = generateUnique7DigitRegId();
+    const defaultClass = classList[0]?.name || allClassNames[0] || 'JSS 1A';
+    const autoId = generateUniqueAlphanumericRegId(defaultClass);
     const defaultDob = '2011-05-15';
     const calculatedAge = calculateAgeFromDob(defaultDob)?.ageText || '15 Yrs';
     setNewStudent({
       name: '',
       studentId: autoId,
-      className: classList[0]?.name || allClassNames[0] || '',
+      className: defaultClass,
       gender: 'Male',
       house: 'Blue House',
       dateOfBirth: defaultDob,
@@ -1883,12 +1888,14 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
     const cleanRegId = String(newStudent.studentId || '').trim();
     if (!cleanRegId) {
       errors.studentId = 'Registration ID is required.';
-    } else if (!/^\d{7}$/.test(cleanRegId)) {
-      errors.studentId = 'Registration ID must be a unique 7-digit number (e.g., 2026101).';
+    } else if (cleanRegId.length < 2 || cleanRegId.length > 30) {
+      errors.studentId = 'Registration ID must be between 2 and 30 characters (e.g., J/1233567H, 2026101).';
+    } else if (!/^[a-zA-Z0-9/_\-.]+$/.test(cleanRegId)) {
+      errors.studentId = 'Registration ID can only contain letters, numbers, and characters like / - _ .';
     } else {
-      const existingStudent = students.find(s => String(s.studentId || '').trim() === cleanRegId);
+      const existingStudent = students.find(s => String(s.studentId || '').trim().toUpperCase() === cleanRegId.toUpperCase());
       if (existingStudent) {
-        errors.studentId = `Registration ID "${cleanRegId}" is already assigned to ${existingStudent.fullName || (existingStudent as any).name}.`;
+        errors.studentId = `Registration ID "${cleanRegId}" is already assigned to ${existingStudent.fullName || (existingStudent as any).name}. Reg ID must be unique!`;
       }
     }
 
@@ -2014,6 +2021,25 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
     if (!nameRes.isValid && nameRes.error) {
       errors.fullName = nameRes.error;
     }
+
+    const origId = (editingStudent as any).originalStudentId || editingStudent.studentId;
+    const cleanId = String(editingStudent.studentId || '').trim();
+    if (!cleanId) {
+      errors.studentId = 'Registration ID is required.';
+    } else if (cleanId.length < 2 || cleanId.length > 30) {
+      errors.studentId = 'Registration ID must be between 2 and 30 characters (e.g. J/1233567H, 2026101).';
+    } else if (!/^[a-zA-Z0-9/_\-.]+$/.test(cleanId)) {
+      errors.studentId = 'Registration ID can only contain letters, numbers, and characters like / - _ .';
+    } else {
+      const duplicate = students.find(s => 
+        String(s.studentId || '').trim().toUpperCase() === cleanId.toUpperCase() && 
+        String(s.studentId || '').trim().toUpperCase() !== String(origId).trim().toUpperCase()
+      );
+      if (duplicate) {
+        errors.studentId = `Registration ID "${cleanId}" is already assigned to ${duplicate.fullName || (duplicate as any).name}. Reg ID must be unique!`;
+      }
+    }
+
     if (!editingStudent.dateOfBirth) {
       errors.dateOfBirth = 'Date of birth is required.';
     }
@@ -2181,11 +2207,12 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
         gpa: finalGpa,
         status: finalStatus,
         isPublished: finalIsPublished,
+        studentId: cleanId,
       };
 
-      await api.updateStudent(editingStudent.studentId, updatedObj);
-      setStudents(prev => prev.map(s => s.studentId === editingStudent.studentId ? updatedObj : s));
-      if (fetchedStudent && fetchedStudent.studentId === editingStudent.studentId) {
+      await api.updateStudent(origId, updatedObj);
+      setStudents(prev => prev.map(s => s.studentId === origId ? updatedObj : s));
+      if (fetchedStudent && (fetchedStudent.studentId === origId || fetchedStudent.studentId === cleanId)) {
         setFetchedStudent(updatedObj);
       }
       setIsEditStudentOpen(false);
@@ -2948,7 +2975,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                                 </button>
                                 <button
                                   onClick={() => {
-                                    setEditingStudent(st as any);
+                                    setEditingStudent({ ...(st as any), originalStudentId: st.studentId });
                                     setIsEditStudentOpen(true);
                                   }}
                                   className="px-2.5 py-1 text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg cursor-pointer inline-flex items-center gap-1"
@@ -3484,7 +3511,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                 setIsViewResultOpen(true);
               }}
               onEditStudentProfile={(studentObj) => {
-                setEditingStudent(studentObj);
+                setEditingStudent({ ...(studentObj as any), originalStudentId: studentObj.studentId });
                 setIsEditStudentOpen(true);
               }}
               onTriggerToast={triggerToast}
@@ -3619,7 +3646,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                       <button
                         type="button"
                         onClick={() => {
-                          setEditingStudent(historyStudent);
+                          setEditingStudent({ ...(historyStudent as any), originalStudentId: historyStudent.studentId });
                           setIsEditStudentOpen(true);
                         }}
                         className="px-4 py-2.5 bg-[#F59E0B] hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl cursor-pointer flex items-center gap-1.5 shrink-0 shadow-xs"
@@ -4959,15 +4986,15 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-[10px] font-bold text-slate-500 uppercase block">
-                    Registration ID (7-Digit Primary Key) *
+                    Registration ID (Alphanumeric & Characters) *
                   </label>
                   <button
                     type="button"
                     onClick={() => {
-                      const autoId = generateUnique7DigitRegId();
+                      const autoId = generateUniqueAlphanumericRegId(newStudent.className);
                       setNewStudent({ ...newStudent, studentId: autoId });
                       if (addStudentErrors.studentId) setAddStudentErrors({ ...addStudentErrors, studentId: '' });
-                      triggerToast(`Auto-generated unique 7-digit Reg ID: ${autoId}`);
+                      triggerToast(`Auto-generated unique Reg ID: ${autoId}`);
                     }}
                     className="text-[10px] font-bold text-[#1E3A8A] hover:underline cursor-pointer flex items-center gap-1"
                   >
@@ -4978,12 +5005,12 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                 <input
                   type="text"
                   required
-                  maxLength={7}
-                  placeholder="e.g. 2026101 (7 numbers)"
+                  maxLength={30}
+                  placeholder="e.g. J/1233567H or 2026101"
                   value={newStudent.studentId}
                   onChange={(e) => {
-                    const digitsOnly = e.target.value.replace(/\D/g, '');
-                    setNewStudent({ ...newStudent, studentId: digitsOnly });
+                    const filtered = e.target.value.replace(/[^a-zA-Z0-9/_\-.]/g, '').toUpperCase();
+                    setNewStudent({ ...newStudent, studentId: filtered });
                     if (addStudentErrors.studentId) setAddStudentErrors({ ...addStudentErrors, studentId: '' });
                   }}
                   className={`w-full rounded-xl p-2.5 text-xs font-mono font-bold focus:outline-none focus:ring-2 transition-all ${
@@ -5266,6 +5293,35 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
             </div>
 
             <form onSubmit={handleSaveEditStudent} noValidate className="space-y-3.5">
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+                  Registration ID (Alphanumeric & Characters) *
+                </label>
+                <input
+                  type="text"
+                  required
+                  maxLength={30}
+                  placeholder="e.g. J/1233567H or 2026101"
+                  value={editingStudent.studentId || ''}
+                  onChange={(e) => {
+                    const filtered = e.target.value.replace(/[^a-zA-Z0-9/_\-.]/g, '').toUpperCase();
+                    setEditingStudent({ ...editingStudent, studentId: filtered } as any);
+                    if (editStudentErrors.studentId) setEditStudentErrors({ ...editStudentErrors, studentId: '' });
+                  }}
+                  className={`w-full rounded-xl p-2.5 text-xs font-mono font-bold focus:outline-none focus:ring-2 transition-all ${
+                    editStudentErrors.studentId
+                      ? 'border-2 border-red-500 bg-red-50/40 text-red-900 focus:ring-red-400'
+                      : 'bg-slate-50 border border-slate-200 text-[#0F172A] focus:ring-[#1E3A8A]'
+                  }`}
+                />
+                {editStudentErrors.studentId && (
+                  <p className="text-[10px] text-red-600 font-bold flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    <span>{editStudentErrors.studentId}</span>
+                  </p>
+                )}
+              </div>
+
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Full Student Name *</label>
                 <input

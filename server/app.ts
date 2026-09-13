@@ -89,6 +89,14 @@ app.post('/api/upload', async (req, res) => {
 // Students API
 app.get('/api/students', async (req, res) => {
   try {
+    const queryId = (req.query.id || req.query.regId || req.query.studentId) as string;
+    if (queryId) {
+      const student = await getStudentById(queryId);
+      if (!student) {
+        return res.status(404).json({ error: 'Student record not found in MongoDB database.' });
+      }
+      return res.json(student);
+    }
     const students = await getAllStudents();
     res.json(students);
   } catch (err: any) {
@@ -96,9 +104,10 @@ app.get('/api/students', async (req, res) => {
   }
 });
 
-app.get('/api/students/:id', async (req, res) => {
+app.get('/api/students/:id(*)', async (req, res) => {
   try {
-    const student = await getStudentById(req.params.id);
+    const targetId = req.params.id || req.params[0] || (req.query.id as string) || (req.query.regId as string);
+    const student = await getStudentById(targetId);
     if (!student) {
       return res.status(404).json({ error: 'Student record not found in MongoDB database.' });
     }
@@ -111,8 +120,10 @@ app.get('/api/students/:id', async (req, res) => {
 app.post('/api/students', async (req, res) => {
   try {
     const regId = String(req.body.studentId || '').trim();
-    if (!/^\d{7}$/.test(regId)) {
-      return res.status(400).json({ error: 'Registration ID must be a unique 7-digit number (e.g., 2026101).' });
+    if (!regId || regId.length < 2 || regId.length > 30 || !/^[a-zA-Z0-9/_\-.]+$/.test(regId)) {
+      return res.status(400).json({
+        error: 'Registration ID must be between 2 and 30 characters and can only contain letters, numbers, and characters like / - _ . (e.g., J/1233567H, 2026101).'
+      });
     }
 
     const isUpdateMode = req.query.mode === 'update';
@@ -123,7 +134,7 @@ app.post('/api/students', async (req, res) => {
       });
     }
 
-    const studentData = { ...req.body };
+    const studentData = { ...req.body, studentId: regId };
     // If passportUrl is base64 or custom image, upload to Cloudinary
     if (studentData.passportUrl && (studentData.passportUrl.startsWith('data:') || studentData.passportUrl.length > 500)) {
       studentData.passportUrl = await uploadToCloudinary(studentData.passportUrl, 'royal_academy/passports');
@@ -136,14 +147,15 @@ app.post('/api/students', async (req, res) => {
   }
 });
 
-app.put('/api/students/:id', async (req, res) => {
+app.put('/api/students/:id(*)', async (req, res) => {
   try {
+    const targetId = req.params.id || req.params[0] || (req.query.id as string) || (req.query.regId as string);
     const updateData = { ...req.body };
     if (updateData.passportUrl && (updateData.passportUrl.startsWith('data:') || updateData.passportUrl.length > 500)) {
       updateData.passportUrl = await uploadToCloudinary(updateData.passportUrl, 'royal_academy/passports');
     }
 
-    const updated = await updateStudent(req.params.id, updateData);
+    const updated = await updateStudent(targetId, updateData);
     if (!updated) {
       return res.status(404).json({ error: 'Student not found to update.' });
     }
@@ -153,10 +165,11 @@ app.put('/api/students/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/students/:id', async (req, res) => {
+app.delete('/api/students/:id(*)', async (req, res) => {
   try {
-    await deleteStudent(req.params.id);
-    res.json({ success: true, message: `Student ${req.params.id} deleted from database.` });
+    const targetId = req.params.id || req.params[0] || (req.query.id as string) || (req.query.regId as string);
+    await deleteStudent(targetId);
+    res.json({ success: true, message: `Student ${targetId} deleted from database.` });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

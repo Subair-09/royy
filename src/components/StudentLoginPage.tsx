@@ -58,9 +58,8 @@ export const StudentLoginPage: React.FC<StudentLoginPageProps> = ({
   const validateRegIdField = (val: string) => {
     const clean = val.trim();
     if (!clean) return 'Please enter student Registration ID.';
-    if (/[a-zA-Z]/.test(clean)) return 'Registration ID cannot contain alphabet letters. Numbers only.';
-    if (!/^\d+$/.test(clean)) return 'Registration ID must contain numbers only.';
-    if (clean.length < 4 || clean.length > 12) return 'Registration ID must be between 4 and 12 digits (e.g. 2025104).';
+    if (clean.length < 2 || clean.length > 30) return 'Registration ID must be between 2 and 30 characters (e.g. J/1233567H).';
+    if (!/^[a-zA-Z0-9/_\-.]+$/.test(clean)) return 'Registration ID can only contain letters, numbers, and characters like / - _ .';
     return undefined;
   };
 
@@ -91,7 +90,7 @@ export const StudentLoginPage: React.FC<StudentLoginPageProps> = ({
   };
 
   const handleRegIdChange = (val: string) => {
-    const clean = val.replace(/\D/g, '').slice(0, 12);
+    const clean = val.replace(/[^a-zA-Z0-9/_\-.]/g, '').slice(0, 30);
     setRegId(clean);
     if (touched.regId) {
       const err = validateRegIdField(clean);
@@ -208,7 +207,7 @@ export const StudentLoginPage: React.FC<StudentLoginPageProps> = ({
                   Student Portal Sign In
                 </h1>
                 <p className="text-xs text-slate-500 mt-1">
-                  Enter your Surname and 7-digit Registration Number to access your terminal result slip.
+                  Enter your Surname and Registration Number (e.g. J/1233567H or 2025104) to access your terminal result slip.
                 </p>
               </div>
             </div>
@@ -267,7 +266,7 @@ export const StudentLoginPage: React.FC<StudentLoginPageProps> = ({
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Registration ID *
+                    Registration ID (Alphanumeric & Symbols) *
                   </label>
                   {touched.regId && fieldErrors.regId && (
                     <span className="text-[10px] text-red-600 font-semibold flex items-center gap-1">
@@ -283,12 +282,12 @@ export const StudentLoginPage: React.FC<StudentLoginPageProps> = ({
                   <input
                     type="text"
                     required
-                    maxLength={12}
+                    maxLength={30}
                     value={regId}
                     onChange={(e) => handleRegIdChange(e.target.value)}
                     onBlur={() => handleBlur('regId')}
-                    placeholder="e.g. 2025104"
-                    className={`w-full pl-10 pr-4 py-3 bg-slate-50 border rounded-2xl text-sm font-mono font-bold text-slate-900 placeholder-slate-400 focus:outline-none transition-all shadow-xs tracking-widest ${
+                    placeholder="e.g. J/1233567H or 2025104"
+                    className={`w-full pl-10 pr-4 py-3 bg-slate-50 border rounded-2xl text-sm font-mono font-bold text-slate-900 placeholder-slate-400 focus:outline-none transition-all shadow-xs tracking-wider ${
                       touched.regId && fieldErrors.regId
                         ? 'border-red-400 bg-red-50/40 focus:ring-2 focus:ring-red-500/20'
                         : 'border-slate-200 focus:bg-white focus:border-[#1E3A8A] focus:ring-2 focus:ring-[#1E3A8A]/10'
